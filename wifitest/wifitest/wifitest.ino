@@ -1,5 +1,12 @@
 #include <ESP8266WiFi.h>
 
+/*
+ *   
+ 1. update network-name and pass-to-network
+ 2. open Com monitor select 115200 baud
+ 3. reset the device
+ */
+ 
 void setup()
 {
   Serial.begin(115200);
