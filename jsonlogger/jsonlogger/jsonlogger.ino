@@ -10,43 +10,7 @@
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
 #include <ESP8266WebServerSecure.h>
-#include <ESP8266mDNS.h>
-#include <time.h>
 
-const float GMT = 0;
-const float UTC = 0;
-const float ECT = 1.00;
-const float EET = 2.00;
-const float ART = 2.00;
-const float EAT = 3.00;
-const float MET = 3.30;
-const float NET = 4.00;
-const float PLT = 5.00;
-const float IST = 5.30;
-const float BST = 6.00;
-const float VST = 7.00;
-const float CTT = 8.00;
-const float JST = 9.00;
-const float ACT = 9.30;
-const float AET = 10.00;
-const float SST = 11.00;
-const float NST = 12.00;
-const float MIT = -11.00;
-const float HST = -10.00;
-const float AST = -9.00;
-const float PST = -8.00;
-const float PNT = -7.00;
-const float MST = -7.00;
-const float CST = -6.00;
-const float EST = -5.00;
-const float IET = -5.00;
-const float PRT = -4.00;
-const float CNT = -3.30;
-const float AGT = -3.00;
-const float BET = -3.00;
-const float CAT = -1.00;
-
-const int EPOCH_1_1_2019 = 1546300800; //1546300800 =  01/01/2019 @ 12:00am (UTC)
 
 #ifndef STASSID
 #define STASSID "----"
@@ -101,29 +65,19 @@ QwJKaEtyN11w0+E=
 
 const int led = 2;
 
-time_t now;
-
-String localTimeString()
-{
-
-  time(&now);
-  struct tm *timeinfo = localtime(&now);
-  int year = timeinfo->tm_year + 1900;
-  int month = timeinfo->tm_mon + 1;
-  int day  = timeinfo->tm_mday + 1;
-  int hour = timeinfo->tm_hour;
-  int mins = timeinfo->tm_min;
-  int sec = timeinfo->tm_sec;
-  int day_of_week = timeinfo->tm_wday;
-  
-  return "Date = " + String(day) + "/" + String(month) + "/" + String(year) + " Time = " + String(hour) + ":" + String(mins) + ":" + String(sec);
-  }
-
 void handleRoot() {
 
-  Serial.println(localTimeString());
   digitalWrite(led, HIGH);
-  server.send(200, "text/plain", "Hello from esp8266 over HTTPS! " + localTimeString());
+  server.send(200, "text/plain", "Hello from esp8266 over HTTPS! ");
+  delay(200);
+  digitalWrite(led, LOW);
+}
+
+void handleJson() {
+
+  digitalWrite(led, HIGH);
+  server.send(200, "application/json;charset=utf-8", "{\"message\": \"hello from ESP8266!\"}");
+  delay(200);
   digitalWrite(led, LOW);
 }
 
@@ -146,7 +100,7 @@ void handleNotFound(){
 
 void setup(void){
   pinMode(led, OUTPUT);
-  digitalWrite(led, LOW);
+  digitalWrite(led, HIGH);
   Serial.begin(115200);
   WiFi.begin(ssid, password);
   Serial.println("");
@@ -157,10 +111,11 @@ void setup(void){
     Serial.print(".");
   }
 
-  configTime(PST, 0, "pool.ntp.org", "time.nist.gov");
+  configTime(3 * 3600, 0, "pool.ntp.org", "time.nist.gov");
 
+  time_t now;
 
-  while (now < EPOCH_1_1_2019)
+  while (now < 1546300800)
   {
     now = time(nullptr);
     delay(500);
@@ -173,25 +128,23 @@ void setup(void){
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
 
-  if (MDNS.begin("esp8266")) {
-    Serial.println("MDNS responder started");
-  }
-
   server.getServer().setRSACert(new BearSSL::X509List(serverCert), new BearSSL::PrivateKey(serverKey));
+
+  server.enableCORS(true);
 
   server.on("/", handleRoot);
 
-  server.on("/inline", [](){
-    server.send(200, "text/plain", "this works as well");
-  });
+  server.on("/json", handleJson);
 
   server.onNotFound(handleNotFound);
 
   server.begin();
   Serial.println("HTTPS server started");
+
+  digitalWrite(led, LOW);
+
 }
 
 void loop(void){
   server.handleClient();
-  MDNS.update();
 }
