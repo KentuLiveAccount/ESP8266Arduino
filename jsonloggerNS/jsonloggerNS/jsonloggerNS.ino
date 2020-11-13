@@ -13,8 +13,8 @@
 
 
 #ifndef STASSID
-#define STASSID "Bearsden 2.0"
-#define STAPSK  "Peace10310313"
+#define STASSID "----"
+#define STAPSK  "----"
 #endif
 
 const char* ssid = STASSID;
