@@ -24,14 +24,17 @@ ESP8266WebServer server(80);
 
 const int cTempMax = 100;
 int temps[cTempMax];
+int target[cTempMax];
 int cTemp = 0;
 int millisTimeLast = 0;
+int targetTemp = 100;
 
 const int led = 2;
 
 void AddTemp(int temp)
 {
-  temps[(cTemp++ % cTempMax)] = temp;
+  temps[(cTemp % cTempMax)] = temp;
+  target[(cTemp++ % cTempMax)] = targetTemp;
 }
 
 String ReadTemps()
@@ -42,7 +45,12 @@ String ReadTemps()
   String str = "";
   while (count)
   {
-    str += String(temps[i++ % cTempMax]);
+    str += "{ \"currenttemp\": ";
+    str += String(temps[i % cTempMax]);
+    str += ", \"targettemp\": ";
+    str += String(target[i++ % cTempMax]);
+    str += "}";
+
     if (count > 1)
       str += ", ";
     count--;
@@ -66,6 +74,18 @@ void handleJson() {
   server.send(200, "application/json;charset=utf-8", "{\"message\": [" + ReadTemps() + "]}");
   delay(200);
   digitalWrite(led, LOW);
+}
+
+void handleSetTemp() {
+  digitalWrite(led, HIGH);
+  Serial.println("gotPost");
+
+  Serial.println("arg: " + server.arg("plain"));
+  server.send(200, "text/plain", "temp set");
+  targetTemp = server.arg("plain").toInt();
+  delay(200);
+  digitalWrite(led, LOW);
+
 }
 
 void handleNotFound(){
@@ -106,7 +126,9 @@ void setup(void){
 
   server.on("/", handleRoot);
 
-  server.on("/json", handleJson);
+  server.on("/json", HTTP_GET, handleJson);
+
+  server.on("/settemp", HTTP_POST, handleSetTemp);
 
   server.onNotFound(handleNotFound);
 
