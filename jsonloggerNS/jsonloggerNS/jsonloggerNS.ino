@@ -17,6 +17,22 @@
 #define STAPSK  "----"
 #endif
 
+#define TC_PIN A0          // set to ADC pin used
+#define AREF 3.1159           // set to AREF, typically board voltage like 3.3 or 5.0
+#define ADC_RESOLUTION 10  // set to ADC bit resolution, 10 is default
+
+float get_voltage(int raw_adc) {
+  float raw = raw_adc;
+  float aref = AREF;
+  float res = pow(2, ADC_RESOLUTION);
+  
+  return (raw * aref) / res;  
+}
+ 
+float get_temperature(float voltage) {
+  return voltage * 200 - 250;
+}
+
 const char* ssid = STASSID;
 const char* password = STAPSK;
 
@@ -40,7 +56,7 @@ void AddTemp(int temp)
 String ReadTemps()
 {
   int count = cTemp < cTempMax ? cTemp : cTempMax;
-  int i = cTemp < cTempMax ? 0 : cTemp + 1;
+  int i = cTemp < cTempMax ? 0 : cTemp;
 
   String str = "";
   while (count)
@@ -81,6 +97,7 @@ void handleSetTemp() {
   Serial.println("gotPost");
 
   Serial.println("arg: " + server.arg("plain"));
+  server.sendHeader("Access-Control-Allow-Origin","*");
   server.send(200, "text/plain", "temp set");
   targetTemp = server.arg("plain").toInt();
   delay(200);
@@ -107,6 +124,7 @@ void handleNotFound(){
 
 void setup(void){
   pinMode(led, OUTPUT);
+  pinMode(A0, INPUT) ;
   digitalWrite(led, HIGH);
   Serial.begin(115200);
   WiFi.begin(ssid, password);
@@ -141,12 +159,19 @@ void setup(void){
 void loop(void){
   server.handleClient();
   int millisNow = millis();
-  if (millisTimeLast == 0 || millisNow - millisTimeLast > (1000 * 5))
+  if (millisTimeLast == 0 || millisNow - millisTimeLast > (1000 * 30))
   {
     millisTimeLast = millisNow;
-    int temp = analogRead(A0);
-    Serial.println("\ntemp: " + String(temp));
-    AddTemp(temp);
+    int reading = analogRead(A0);
+    Serial.println("\nreading: " + String(reading));
+    float voltage = get_voltage(reading);
+    Serial.println("\nvoltage: " + String(voltage));
+    int tempC  = get_temperature(voltage);
+    Serial.println("\ntempC: " + String(tempC));
+
+    int tempF  = tempC * 9 / 5 + 32;
+    Serial.println("\ntempF: " + String(tempF));
+    AddTemp(tempF);
     Serial.println("\ntemps: " + ReadTemps());
   }
 }
