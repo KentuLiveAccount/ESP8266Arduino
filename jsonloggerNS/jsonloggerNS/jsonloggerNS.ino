@@ -9,18 +9,12 @@
   r, III, from the HelloServer.ino example.
   This example is released into the public domain.
 */
-#include <ESP8266WiFi.h>
-#include <WiFiClient.h>
+#include <WiFiManager.h>
 #include <ESP8266WebServer.h>
 #include <Servo.h>
 #include <PID_v1.h>
 #include <math.h>
 
-
-#ifndef STASSID
-#define STASSID "----"
-#define STAPSK  "----"
-#endif
 
 #define ServoPin 14   //D5 is GPIO14
 #define DemultiplexPin 12 // D6 is GPIO12
@@ -67,9 +61,6 @@ float get_voltage(int raw_adc) {
 float get_temperature(float voltage) {
   return voltage * 200 - 250;
 }
-
-const char* ssid = STASSID;
-const char* password = STAPSK;
 
 ESP8266WebServer server(80);
 
@@ -186,11 +177,34 @@ void setup(void){
 
   myPID.SetMode(AUTOMATIC);
 
-  if (!WiFi.config(local_IP, gateway, subnet)) {
-    Serial.println("STA Failed to configure");
+   WiFi.mode(WIFI_STA); // explicitly set mode, esp defaults to STA+AP
+
+  //WiFiManager, Local intialization. Once its business is done, there is no need to keep it around
+  WiFiManager wm;
+
+  // reset settings - wipe stored credentials for testing
+  // these are stored by the esp library
+  //wm.resetSettings();
+
+  // Automatically connect using saved credentials,
+  // if connection fails, it starts an access point with the specified name ( "AutoConnectAP"),
+  // if empty will auto generate SSID, if password is blank it will be anonymous AP (wm.autoConnect())
+  // then goes into a blocking loop awaiting configuration and will return success result
+
+  wm.setSTAStaticIPConfig(IPAddress(192,168,1,4)  /*ip*/, IPAddress(192,168,1,1 /*gw*/), IPAddress(255,255,255,0 /*sn mask*/)); // optional DNS 4th argument
+
+  bool res;
+  res = wm.autoConnect("AutoConnectAP","password"); // password protected ap
+
+  if(!res) {
+      Serial.println("Failed to connect");
+      // ESP.restart();
+  } 
+  else {
+      //if you get here you have connected to the WiFi    
+      Serial.println("connected...yeey :)");
   }
 
-  WiFi.begin(ssid, password);
   Serial.println("");
 
   // Wait for connection
@@ -201,7 +215,7 @@ void setup(void){
 
   Serial.println("");
   Serial.print("Connected to ");
-  Serial.println(ssid);
+  Serial.println(wm.getWiFiSSID(false /*persistent*/));
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
 
