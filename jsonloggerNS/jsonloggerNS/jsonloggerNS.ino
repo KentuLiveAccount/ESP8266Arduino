@@ -18,6 +18,7 @@
 
 #define ServoPin 14   //D5 is GPIO14
 #define DemultiplexPin 12 // D6 is GPIO12
+#define DemultiplexPin1 13 // D6 is GPIO12
 
 #define TC_PIN A0          // set to ADC pin used
 #define AREF 3.1159           // set to AREF, typically board voltage like 3.3 or 5.0
@@ -168,6 +169,8 @@ void setup(void){
   pinMode(led, OUTPUT);
   pinMode(ServoPin, OUTPUT);
   pinMode(DemultiplexPin, OUTPUT);
+  pinMode(DemultiplexPin1, OUTPUT);
+  digitalWrite(DemultiplexPin1, LOW);
   pinMode(A0, INPUT) ;
   digitalWrite(led, HIGH);
   Serial.begin(115200);
