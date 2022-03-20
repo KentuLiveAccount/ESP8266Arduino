@@ -1,8 +1,10 @@
 //#include <WiFiManager.h>
 
 #include <WiFi.h>
-#include <AsyncTCP.h>
-#include <ESPAsyncWebServer.h>
+//#include <AsyncTCP.h>
+#include <WebServer.h>
+
+#inclue <wifisetting.h>
 
 //#include <Servo.h>
 //#include <ESP32Servo.h>
@@ -10,12 +12,16 @@
 #include <PID_v1.h>
 #include <math.h>
 
+
 #define led 5 // GPIO5 for LED
-#define Thermistor_PIN 0          // set to ADC pin used -> GPIO0
-#define Thermocouple_PIN 1        // set to ADC pin used -> GPIO1
+#define MeatThermistor_PIN 1          // set to ADC pin used -> GPIO0
+#define AmbientThermistor_PIN 0        // set to ADC pin used -> GPIO1
 #define ServoPin 4   //4 is GPIO4
 
 #define ADC_RESOLUTION 12  // set to ADC bit resolution, 10 is default
+
+//#define DEBUG(X) X
+#define DEBUG(X) ;
 
 double V_0 = 3.3; // 3.3v is the standard supply
 
@@ -199,7 +205,7 @@ void Servo::_resetFields(void) {
 double sensorMax = 3.3;
 Servo myservo; 
 
-AsyncWebServer server(80);
+WebServer server(80);
 
 const int cTempMax = 100;
 int temps[cTempMax];
@@ -251,66 +257,63 @@ String ReadTemps()
   return str;
 }
 
-void handleRoot(AsyncWebServerRequest *request) {
+void handleRoot() {
 
   digitalWrite(led, HIGH);
-  request->send(200, "text/plain", "Hello from ESP32-C3 over HTTP! ");
+  server.send(200, "text/plain", "Hello from ESP32-C3-01M over HTTP! ");
   delay(200);
   digitalWrite(led, LOW);
 }
 
-void handleJson(AsyncWebServerRequest *request) {
+void handleJson() {
 
   digitalWrite(led, HIGH);
 
-  AsyncWebServerResponse *response = request->beginResponse(200, "application/json;charset=utf-8", "{\"message\": [" + ReadTemps() + "]}");
-  response->addHeader("Access-Control-Allow-Origin","*");
-  request->send(response);
+  server.sendHeader("Access-Control-Allow-Origin","*");
+  server.send(200, "application/json;charset=utf-8", "{\"message\": [" + ReadTemps() + "]}");
 
   delay(200);
   digitalWrite(led, LOW);
 }
 
-void handleSetTemp(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+void handleSetTemp() {
   digitalWrite(led, HIGH);
   Serial.println("gotPost");
+  Serial.println("arg: " + server.arg("plain"));
 
-  int temp = atoi((const char *)data);
-  Serial.println(String("arg: ") + String(temp));
-
-  AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", "temp set");
-  response->addHeader("Access-Control-Allow-Origin","*");
-  request->send(response);
-  targetTemp = temp;
+  server.sendHeader("Access-Control-Allow-Origin","*");
+  server.send(200, "text/plain", "temp set");
+  targetTemp = server.arg("plain").toInt();
   UpdateCurrentTarget(targetTemp);
+  
 
   delay(200);
   digitalWrite(led, LOW);
 }
 
-void handleNotFound(AsyncWebServerRequest *request){
+void handleNotFound(){
   digitalWrite(led, HIGH);
   String message = "File Not Found\n\n";
   message += "URI: ";
-  message += request->url();
+  message += server.uri();
   message += "\nMethod: ";
-  message += (request->method() == HTTP_GET)?"GET":"POST";
+  message += (server.method() == HTTP_GET)?"GET":"POST";
   message += "\nArguments: ";
-  message += request->args();
+  message += server.args();
   message += "\n";
 
-  for (uint8_t i=0; i<request->args(); i++){
-    message += " " + request->argName(i) + ": " + request->arg(i) + "\n";
+  for (uint8_t i=0; i<server.args(); i++){
+    message += " " + server.argName(i) + ": " + server.arg(i) + "\n";
   }
 
-  request->send(404, "text/plain", message);
+  server.send(404, "text/plain", message);
   digitalWrite(led, LOW);
 }
 
 void setup(void){
   pinMode(led, OUTPUT);
-  pinMode(Thermistor_PIN, INPUT); // meat temp
-  pinMode(Thermocouple_PIN, INPUT); // external temp
+  pinMode(MeatThermistor_PIN, INPUT); // meat temp
+  pinMode(AmbientThermistor_PIN, INPUT); // external temp
   Serial.begin(9600);
 
   if (!myservo.attach(ServoPin, Servo::CHANNEL_NOT_ATTACHED, 0, 180))
@@ -362,7 +365,7 @@ void setup(void){
   }
 #endif //0
 
-  WiFi.begin("Bearsden 2.0", "Peace10310313");
+  WiFi.begin(WIFINAME, WIFIPW);
   Serial.println("\nConnecting");
 
   while(WiFi.status() != WL_CONNECTED){
@@ -389,77 +392,94 @@ void setup(void){
 
   server.on("/json", HTTP_GET, handleJson);
 
-  server.on("/settemp", HTTP_POST, [](AsyncWebServerRequest * request){}, NULL, handleSetTemp);
+  server.on("/settemp", HTTP_POST, handleSetTemp);
 
   server.onNotFound(handleNotFound);
 
   server.begin();
-  Serial.println("HTTPS server started");
+  Serial.println("HTTP server started");
 
   digitalWrite(led, LOW);
 }
 
-float get_voltage(int raw_adc) {
-  float raw = raw_adc;
-  float aref = 3.3;
-  float res = pow(2, ADC_RESOLUTION);
-  
-  return (raw * aref) / res;  
-}
-
-float get_temperature(float voltage) {
-  return voltage * 200 - 250;
-}
-
-float readThermoCouple()
+double readVoltage(int pin)
 {
-    int reading = 0;
-    for (int i = 0; i < 10; i++)
-    {
-      delay(10);
-      reading = reading + analogRead(Thermocouple_PIN);
-    }
-
-    reading = reading / 10;
-
-    Serial.println("\nreading: " + String(reading));
-    float voltage = get_voltage(reading);
-    Serial.println("\nvoltage: " + String(voltage));
-    return get_temperature(voltage);
-}
-
-float readThermistor()
-{
-  // read the pin value 10 times over 100 ms span and take average
+    // read the pin value 10 times over 100 ms span and take average
   double sensorValue = 0;
+  double sensorAverage = 0;
   double vrefSensorValue = 0;
-  const int dcount = 20;
+  const int dcount = 100;
+  int rawData[dcount];
+  int secondMax = 0;
+
+  DEBUG(Serial.print("Rawdata :"));
   for (int i = 0; i < dcount; i++)
   {
-    delay(10);
-    sensorValue += analogRead(Thermistor_PIN);
+    delay(20);
+    rawData[i] = analogRead(pin);
+    DEBUG(Serial.print(String(rawData[i])));
+    DEBUG(Serial.print(", "));
+    double dsv = rawData[i];
+
+    if (sensorValue < dsv)
+      secondMax = sensorValue;
+    sensorValue = max(sensorValue, dsv);
+    sensorAverage += rawData[i];
   }
 
-  sensorValue = sensorValue / dcount;
+  if (secondMax == 0)
+    secondMax = sensorValue;
 
-  Serial.println("\nTermistorSensor: " + String(sensorValue));
+  DEBUG(Serial.println("\n"));
+  sensorAverage = sensorAverage / dcount;
 
+  double sensorAvgMinusAnom = 0;
+  int cMatch = 0;
+  for (int i = 0; i < dcount; i++)
+  {
+    if (abs(rawData[i] - sensorValue) > 20)
+      continue;
+
+      cMatch++;
+      sensorAvgMinusAnom += rawData[i];
+  }
+
+  DEBUG(Serial.println("\ncMatch: " + String(cMatch)));
+  if (cMatch == 0)
+    sensorAvgMinusAnom = sensorMax;
+   else
+    sensorAvgMinusAnom = sensorAvgMinusAnom / cMatch;
+   
+  DEBUG(Serial.println("\nTermistorSensorMax: " + String(sensorValue)));
+  DEBUG(Serial.println("\nTermistorSensorAvg: " + String(sensorAverage)));
+  DEBUG(Serial.println("\nTermistorSensorAvgNA: " + String(sensorAvgMinusAnom)));
+
+  return sensorAvgMinusAnom;
+}
+
+double ohmFromADC(double adcIn)
+{
   double sensorMax = pow(2, ADC_RESOLUTION);
   // Convert the analog reading (which goes from 0 - 4096) to voltage reference (3.3V):
-  double voltage = sensorValue * 3.3  / sensorMax;
+  double voltage = adcIn * 3.3  / sensorMax;
 
   // i'm adjusting the misterious temperature error (for now treating it as constant error)
   // voltage = voltage - 0.028;
 
-  double R_1 = R_2 * (V_0 - voltage)/voltage; // voltage to resistance
+  double R_1 = 0;
 
-  double rThermistor = R_1;
+  if (voltage > 0)
+    R_1 = R_2 * (V_0 - voltage)/voltage; // voltage to resistance
 
-  Serial.println("\nTermistorOhm: " + String(rThermistor));
-  if (rThermistor < 0)
+  return R_1;
+}
+
+float CelciusFromOhm(double ohm)
+{
+  if (ohm < 0)
     return 0;
 
-  double lnR = log(rThermistor);
+  double lnR = log(ohm);
 
   // T(K) = 1/(C0 + C1Ln(R) + C2(Ln(R))^3)
   double temp  = factor /(CM0 + lnR * CM1 + CM2 * lnR * lnR * lnR);
@@ -471,35 +491,47 @@ float readThermistor()
   return temp;
 }
 
+float readThermistor(int pin)
+{
+  double sensorValue = readVoltage(pin);
+  double rThermistor = ohmFromADC(sensorValue);
+
+  DEBUG(Serial.println("\nTermistorOhm: " + String(rThermistor)));
+  return CelciusFromOhm(rThermistor);
+}
+
+float farenheightFromCelsius(double c)
+{
+    return c * 9 / 5 + 32;
+}
+
 void loop(void){
+  server.handleClient();
   int millisNow = millis();
-  if (millisTimeLast == 0 || millisNow - millisTimeLast > (1000 * 10))
+  if (millisTimeLast == 0 || abs(millisNow - millisTimeLast) > (1000 * 10))
   {
     millisTimeLast = millisNow;
-    int tempC = 0;
-    tempC  = readThermoCouple();
-    Serial.println("\nX-tempC: " + String(tempC));
+    int tempC = readThermistor(AmbientThermistor_PIN);
+    DEBUG(Serial.println("\nX-tempC: " + String(tempC)));
 
-    currentTemp  = tempC * 9 / 5 + 32;
-    Serial.println("\nX-tempF: " + String(currentTemp));
+    currentTemp  = farenheightFromCelsius(tempC);
+    DEBUG(Serial.println("\nX-tempF: " + String(currentTemp)));
 
-    tempC = readThermistor();
-    Serial.println("\nI-tempC: " + String(tempC));
+    tempC = readThermistor(MeatThermistor_PIN);
+    DEBUG(Serial.println("\nI-tempC: " + String(tempC)));
 
-    currentInternalTemp  = tempC * 9 / 5 + 32;
-    Serial.println("\nI-tempF: " + String(currentInternalTemp));
+    currentInternalTemp  = farenheightFromCelsius(tempC);
+    DEBUG(Serial.println("\nI-tempF: " + String(currentInternalTemp)));
     AddTemp(currentTemp, currentInternalTemp);
-    Serial.println("\ntemps: " + ReadTemps());
+    //Serial.println("\ntemps: " + ReadTemps());
     
-
     myPID.Compute();
 
     int angleI = angle > 105 ? 105 : angle;
     angleI = angleI < 0 ? 0 : angleI;
 
-    Serial.println("\nservo angle: " + String(angleI));
+    DEBUG(Serial.println("\nservo angle: " + String(angleI)));
 
     myservo.write(angleI);
-
   }
 }
