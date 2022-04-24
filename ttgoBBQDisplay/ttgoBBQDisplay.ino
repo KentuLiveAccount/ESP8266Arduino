@@ -62,6 +62,14 @@ void loop() {
       if (error) {
         Serial.print("deserializeJson() failed: ");
         Serial.println(error.c_str());
+
+        display.clearDisplay();
+        display.setCursor(0,0);
+        display.setTextSize(2);
+        display.print("JSON Err: ");
+        display.print(error.c_str());
+        display.display();
+
         return;
       }
 
@@ -69,22 +77,33 @@ void loop() {
       int message_0_currenttemp = message_0["currenttemp"]; // 222
       int message_0_internatemp = message_0["internatemp"]; // 221
       int message_0_targettemp = message_0["targettemp"]; // 100
+      int message_0_servoangle = message_0["servoangle"]; // 100
       display.clearDisplay();
       display.setCursor(0,0);
       display.setTextSize(2);
       display.print("Atm: ");
       display.print(message_0_currenttemp);
-      display.setCursor(0,20);
+      display.setCursor(0,17);
       display.print("Int: ");
       display.print(message_0_internatemp);
-      display.setCursor(0,40);
+      display.setCursor(0,34);
       display.print("Tgt: ");
       display.print(message_0_targettemp);
+      display.setCursor(0,51);
+      display.print("Srv: ");
+      display.print(message_0_servoangle);
       display.display();
       
       Serial.println(payload);
     }
     else {
+      display.clearDisplay();
+      display.setCursor(0,0);
+      display.setTextSize(2);
+      display.print("HttpGet Err: ");
+      display.print(String(httpResponseCode));
+      display.display();
+
       Serial.print("Error code: ");
       Serial.println(httpResponseCode);
     }
@@ -95,6 +114,6 @@ void loop() {
     Serial.println("WiFi Disconnected");
   }
 
-delay(3000);
+delay(10000);
 
 }

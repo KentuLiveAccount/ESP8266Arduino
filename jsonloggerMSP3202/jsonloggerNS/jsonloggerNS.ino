@@ -78,6 +78,8 @@ String ReadCur()
   str += String(intTemps[i]);
   str += ", \"targettemp\": ";
   str += String(target[i]);
+  str += ", \"servoAngle\": ";
+  str += String(angle);
   str += "}";
 
   return str;
