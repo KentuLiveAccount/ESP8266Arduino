@@ -4,7 +4,7 @@
 //#include <AsyncTCP.h>
 #include <WebServer.h>
 
-#inclue <wifisetting.h>
+#include "wifisetting.h"
 
 //#include <Servo.h>
 //#include <ESP32Servo.h>
@@ -29,9 +29,6 @@ double R_2 = 2001.0; //Fixed register closer to ground. 2.2k but the one had err
 
 double factor = 10000000.0;
 
-double CM0 = 9159.518265; // 0.9159518265 e-3 = 0.0009159518265
-double CM1 = 1857.594704; //1.857594704 e-4 = 0.0001857594704
-double CM2 = 1.843595405; //1.843595405 e-7 = 0.0000001843595405
 
 class Servo {
     // Default min/max pulse widths (in microseconds) and angles (in
@@ -474,7 +471,32 @@ double ohmFromADC(double adcIn)
   return R_1;
 }
 
-float CelciusFromOhm(double ohm)
+struct ThermistorValues {
+  int pin;
+  double CM0;
+  double CM1;
+  double CM2;
+};
+
+#define amb 0
+#define meat 1
+
+ThermistorValues tv[2] = {
+  {
+    AmbientThermistor_PIN,
+    10323.46989, // 0.001032346989 * 10^7
+    1847.102584, // 0.0001847102584 * 10^7
+    0.6514487463, // 0.00000006514487463 * 10^7
+  },
+  {
+    MeatThermistor_PIN,
+    10052.61339, // 0.001005261339 * 10^7
+    1916.020322, // 0.0001916020322 * 10^7
+    0.1250868280, // 0.00000001250868280 * 10^7]
+  }
+};
+
+float CelciusFromOhm(double ohm, int sensor)
 {
   if (ohm < 0)
     return 0;
@@ -482,7 +504,7 @@ float CelciusFromOhm(double ohm)
   double lnR = log(ohm);
 
   // T(K) = 1/(C0 + C1Ln(R) + C2(Ln(R))^3)
-  double temp  = factor /(CM0 + lnR * CM1 + CM2 * lnR * lnR * lnR);
+  double temp  = factor /(tv[sensor].CM0 + lnR * tv[sensor].CM1 + tv[sensor].CM2 * lnR * lnR * lnR);
   temp  = temp - 273.15; // K -> C
 
   if (temp > 500)
@@ -491,13 +513,13 @@ float CelciusFromOhm(double ohm)
   return temp;
 }
 
-float readThermistor(int pin)
+float readThermistor(int sensor)
 {
-  double sensorValue = readVoltage(pin);
+  double sensorValue = readVoltage(tv[sensor].pin);
   double rThermistor = ohmFromADC(sensorValue);
 
   DEBUG(Serial.println("\nTermistorOhm: " + String(rThermistor)));
-  return CelciusFromOhm(rThermistor);
+  return CelciusFromOhm(rThermistor, sensor);
 }
 
 float farenheightFromCelsius(double c)
@@ -505,19 +527,38 @@ float farenheightFromCelsius(double c)
     return c * 9 / 5 + 32;
 }
 
+// #define THERMISTORCALIBRATION 1
+
+#ifdef THERMISTORCALIBRATION
 void loop(void){
   server.handleClient();
   int millisNow = millis();
   if (millisTimeLast == 0 || abs(millisNow - millisTimeLast) > (1000 * 10))
   {
     millisTimeLast = millisNow;
-    int tempC = readThermistor(AmbientThermistor_PIN);
+    double sensorValue = readVoltage(tv[amb].pin);
+    double rThermistorAmb = ohmFromADC(sensorValue);
+
+    sensorValue = readVoltage(tv[meat].pin);
+    double rThermistorMeat = ohmFromADC(sensorValue);
+
+    AddTemp(rThermistorAmb, rThermistorMeat);
+  }
+}
+#else
+void loop(void){
+  server.handleClient();
+  int millisNow = millis();
+  if (millisTimeLast == 0 || abs(millisNow - millisTimeLast) > (1000 * 10))
+  {
+    millisTimeLast = millisNow;
+    int tempC = readThermistor(amb);
     DEBUG(Serial.println("\nX-tempC: " + String(tempC)));
 
     currentTemp  = farenheightFromCelsius(tempC);
     DEBUG(Serial.println("\nX-tempF: " + String(currentTemp)));
 
-    tempC = readThermistor(MeatThermistor_PIN);
+    tempC = readThermistor(meat);
     DEBUG(Serial.println("\nI-tempC: " + String(tempC)));
 
     currentInternalTemp  = farenheightFromCelsius(tempC);
@@ -535,3 +576,4 @@ void loop(void){
     myservo.write(angleI);
   }
 }
+#endif

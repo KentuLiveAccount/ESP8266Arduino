@@ -80,7 +80,7 @@ void loop() {
       int message_0_servoangle = message_0["servoangle"]; // 100
       display.clearDisplay();
       display.setCursor(0,0);
-      display.setTextSize(2);
+      display.setTextSize(2); 
       display.print("Atm: ");
       display.print(message_0_currenttemp);
       display.setCursor(0,17);
@@ -111,7 +111,12 @@ void loop() {
     http.end();
   }
   else {
-    Serial.println("WiFi Disconnected");
+      display.clearDisplay();
+      display.setCursor(0,0);
+      display.setTextSize(2);
+      display.print("WiFi Disconnected");
+      display.display();
+      Serial.println("WiFi Disconnected");
   }
 
 delay(10000);
