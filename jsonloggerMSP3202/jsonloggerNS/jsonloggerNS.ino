@@ -30,7 +30,7 @@
 
 double V_0 = 3.3; // 3.3v is the standard supply
 
-double R_2 = 2001.0; //Fixed register closer to ground. 2.2k but the one had error
+double R_2 = 2001.0; //Fixed register closer to ground. 2.0k but the one had error
 
 double factor = 10000000.0;
 
