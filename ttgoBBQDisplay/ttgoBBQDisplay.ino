@@ -7,10 +7,15 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
+#ifndef STASSID
+#define STASSID "----"
+#define STAPSK  "----"
+#endif
+
 #define OLED_RST 16
 Adafruit_SSD1306 display(128, 64, &Wire, OLED_RST);
-const char* ssid = "Bearsden 2.0";
-const char* pass = "Peace10310313";
+const char* ssid = " STASSID";
+const char* pass = "STAPSK";
 
 const char* turn_on = "http://192.168.1.4/cur";
 
