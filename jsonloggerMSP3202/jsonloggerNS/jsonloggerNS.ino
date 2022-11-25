@@ -50,8 +50,11 @@ double targetTemp = 100;
 double currentTemp = 0;
 double currentInternalTemp = 0;
 double angle = 0;
+double pidP = 2;
+double pidI = 5;
+double pidD = 1;
 
-PID myPID(&currentTemp, &angle, &targetTemp,2,5,1, DIRECT);
+PID myPID(&currentTemp, &angle, &targetTemp, pidP, pidI, pidD, DIRECT);
 
 const int led = 2;
 
@@ -85,6 +88,29 @@ String ReadCur()
   return str;
 }
 
+String ReadCurPID()
+{
+  const int i = (cTemp + cTempMax - 1) % cTempMax;
+
+  String str = "";
+  str += "{ \"currenttemp\": ";
+  str += String(temps[i]);
+  str += ", \"internatemp\": ";
+  str += String(intTemps[i]);
+  str += ", \"targettemp\": ";
+  str += String(target[i]);
+  str += ", \"servoangle\": ";
+  str += String(angle);
+  str += ", \"pidp\": ";
+  str += String(pidP);
+  str += ", \"pidi\": ";
+  str += String(pidI);
+  str += ", \"pidd\": ";
+  str += String(pidD);
+  str += "}";
+
+  return str;
+}
 String ReadTemps()
 {
   int count = cTemp < cTempMax ? cTemp : cTempMax;
@@ -134,9 +160,16 @@ void handleCur() {
   digitalWrite(led, LOW);  
 }
 
+void handleCurPID() {
+  digitalWrite(led, HIGH);
+  server.sendHeader("Access-Control-Allow-Origin","*");
+  server.send(200, "application/json;charset=utf-8", "{\"message\": [" + ReadCurPID() + "]}");
+  delay(200);
+  digitalWrite(led, LOW);  
+}
 void handleSetTemp() {
   digitalWrite(led, HIGH);
-  Serial.println("gotPost");
+  Serial.println("gotPost - SetTemp");
 
   Serial.println("arg: " + server.arg("plain"));
   server.sendHeader("Access-Control-Allow-Origin","*");
@@ -147,6 +180,48 @@ void handleSetTemp() {
   delay(200);
   digitalWrite(led, LOW);
 
+}
+
+void handleSetPidP() {
+  digitalWrite(led, HIGH);
+  Serial.println("gotPost - SetPidP");
+
+  Serial.println("arg: " + server.arg("plain"));
+  server.sendHeader("Access-Control-Allow-Origin","*");
+  server.send(200, "text/plain", "PidP updated");
+  pidP = server.arg("plain").toDouble();
+  myPID.SetTunings(pidP, pidI, pidD);
+
+  delay(200);
+  digitalWrite(led, LOW);
+}
+
+void handleSetPidI() {
+  digitalWrite(led, HIGH);
+  Serial.println("gotPost - SetPidI");
+
+  Serial.println("arg: " + server.arg("plain"));
+  server.sendHeader("Access-Control-Allow-Origin","*");
+  server.send(200, "text/plain", "PidP updated");
+  pidI = server.arg("plain").toDouble();
+  myPID.SetTunings(pidP, pidI, pidD);
+
+  delay(200);
+  digitalWrite(led, LOW);
+}
+
+void handleSetPidD() {
+  digitalWrite(led, HIGH);
+  Serial.println("gotPost - SetPidD");
+
+  Serial.println("arg: " + server.arg("plain"));
+  server.sendHeader("Access-Control-Allow-Origin","*");
+  server.send(200, "text/plain", "PidP updated");
+  pidD = server.arg("plain").toDouble();
+  myPID.SetTunings(pidP, pidI, pidD);
+
+  delay(200);
+  digitalWrite(led, LOW);
 }
 
 void handleNotFound(){
@@ -234,8 +309,13 @@ void setup(void){
   server.on("/json", HTTP_GET, handleJson);
 
   server.on("/cur", HTTP_GET, handleCur);
+  server.on("/curpid", HTTP_GET, handleCurPID);
 
   server.on("/settemp", HTTP_POST, handleSetTemp);
+
+  server.on("/setpidp", HTTP_POST, handleSetPidP);
+  server.on("/setpidi", HTTP_POST, handleSetPidI);
+  server.on("/setpidd", HTTP_POST, handleSetPidD);
 
   server.onNotFound(handleNotFound);
 
