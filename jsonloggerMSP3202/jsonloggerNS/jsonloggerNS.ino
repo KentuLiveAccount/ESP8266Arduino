@@ -40,11 +40,15 @@ Servo myservo;
 ESP8266WebServer server(80);
 
 
-const int cTempMax = 100;
-int temps[cTempMax];
-int intTemps[cTempMax];
-int target[cTempMax];
-int cTemp = 0;
+const int cDataMax = 100;
+int temps[cDataMax];
+int intTemps[cDataMax];
+int target[cDataMax];
+int angles[cDataMax];
+double pidPs[cDataMax];
+double pidIs[cDataMax];
+double pidDs[cDataMax];
+int cData = 0;
 int millisTimeLast = 0;
 double targetTemp = 100;
 double currentTemp = 0;
@@ -58,21 +62,31 @@ PID myPID(&currentTemp, &angle, &targetTemp, pidP, pidI, pidD, DIRECT);
 
 const int led = 2;
 
-void AddTemp(int temp, int tempInt)
+void AddTemp(int temp, int tempInt, int angleI)
 {
-  temps[(cTemp % cTempMax)] = temp;
-  intTemps[cTemp % cTempMax] = tempInt;
-  target[(cTemp++ % cTempMax)] = targetTemp;
+  const int i = cData++ % cDataMax;
+  temps[i] = temp;
+  intTemps[i] = tempInt;
+  target[i] = targetTemp;
+  angles[i] = angleI;
+  pidPs[i] = pidP;
+  pidIs[i] = pidI;
+  pidDs[i] = pidD;
+}
+
+int currentIndex()
+{
+  return (cData + cDataMax - 1) % cDataMax;
 }
 
 void UpdateCurrentTarget(int newTarget)
 {
-  target[(cTemp + cTempMax - 1) % cTempMax] = newTarget;
+  target[currentIndex()] = newTarget;
 }
 
 String ReadCur()
 {
-  const int i = (cTemp + cTempMax - 1) % cTempMax;
+  const int i = currentIndex();
 
   String str = "";
   str += "{ \"currenttemp\": ";
@@ -82,7 +96,7 @@ String ReadCur()
   str += ", \"targettemp\": ";
   str += String(target[i]);
   str += ", \"servoangle\": ";
-  str += String(angle);
+  str += String(angles[i]);
   str += "}";
 
   return str;
@@ -90,41 +104,40 @@ String ReadCur()
 
 String ReadCurPID()
 {
-  const int i = (cTemp + cTempMax - 1) % cTempMax;
+  const int i = currentIndex();
 
-  String str = "";
-  str += "{ \"currenttemp\": ";
+  String str = "{ \"currenttemp\": ";
   str += String(temps[i]);
   str += ", \"internatemp\": ";
   str += String(intTemps[i]);
   str += ", \"targettemp\": ";
   str += String(target[i]);
   str += ", \"servoangle\": ";
-  str += String(angle);
+  str += String(angles[i]);
   str += ", \"pidp\": ";
-  str += String(pidP);
+  str += String(pidPs[i]);
   str += ", \"pidi\": ";
-  str += String(pidI);
+  str += String(pidIs[i]);
   str += ", \"pidd\": ";
-  str += String(pidD);
+  str += String(pidDs[i]);
   str += "}";
 
   return str;
 }
 String ReadTemps()
 {
-  int count = cTemp < cTempMax ? cTemp : cTempMax;
-  int i = cTemp < cTempMax ? 0 : cTemp;
+  int count = cData < cDataMax ? cData : cDataMax;
+  int i = cData < cDataMax ? 0 : cData;
 
   String str = "";
   while (count)
   {
     str += "{ \"currenttemp\": ";
-    str += String(temps[i % cTempMax]);
+    str += String(temps[i % cDataMax]);
     str += ", \"internatemp\": ";
-    str += String(intTemps[i % cTempMax]);
+    str += String(intTemps[i % cDataMax]);
     str += ", \"targettemp\": ";
-    str += String(target[i++ % cTempMax]);
+    str += String(target[i++ % cDataMax]);
     str += "}";
 
     if (count > 1)
@@ -135,6 +148,38 @@ String ReadTemps()
   return str;
 }
 
+String ReadTempsPID()
+{
+  int count = cData < cDataMax ? cData : cDataMax;
+  int i = cData < cDataMax ? 0 : cData;
+
+  String str = "";
+  while (count)
+  {
+    int t = i++ % cDataMax;
+    str += "{ \"currenttemp\": ";
+    str += String(temps[t]);
+    str += ", \"internatemp\": ";
+    str += String(intTemps[t]);
+    str += ", \"targettemp\": ";
+    str += String(target[t]);
+    str += ", \"angle\": ";
+    str += String(angles[t]);
+    str += ", \"pidP\": ";
+    str += String(pidPs[t]);
+    str += ", \"pidI\": ";
+    str += String(pidIs[t]);
+    str += ", \"pidD\": ";
+    str += String(pidDs[t]);
+    str += "}";
+
+    if (count > 1)
+      str += ", ";
+    count--;
+  }
+
+  return str;
+}
 void handleRoot() {
 
   digitalWrite(led, HIGH);
@@ -148,6 +193,16 @@ void handleJson() {
   digitalWrite(led, HIGH);
   server.sendHeader("Access-Control-Allow-Origin","*");
   server.send(200, "application/json;charset=utf-8", "{\"message\": [" + ReadTemps() + "]}");
+  delay(200);
+  digitalWrite(led, LOW);
+}
+
+void handleJsonPID()
+{
+
+  digitalWrite(led, HIGH);
+  server.sendHeader("Access-Control-Allow-Origin","*");
+  server.send(200, "application/json;charset=utf-8", "{\"message\": [" + ReadTempsPID() + "]}");
   delay(200);
   digitalWrite(led, LOW);
 }
@@ -167,6 +222,7 @@ void handleCurPID() {
   delay(200);
   digitalWrite(led, LOW);  
 }
+
 void handleSetTemp() {
   digitalWrite(led, HIGH);
   Serial.println("gotPost - SetTemp");
@@ -179,7 +235,6 @@ void handleSetTemp() {
 
   delay(200);
   digitalWrite(led, LOW);
-
 }
 
 void handleSetPidP() {
@@ -202,7 +257,7 @@ void handleSetPidI() {
 
   Serial.println("arg: " + server.arg("plain"));
   server.sendHeader("Access-Control-Allow-Origin","*");
-  server.send(200, "text/plain", "PidP updated");
+  server.send(200, "text/plain", "PidI updated");
   pidI = server.arg("plain").toDouble();
   myPID.SetTunings(pidP, pidI, pidD);
 
@@ -216,7 +271,7 @@ void handleSetPidD() {
 
   Serial.println("arg: " + server.arg("plain"));
   server.sendHeader("Access-Control-Allow-Origin","*");
-  server.send(200, "text/plain", "PidP updated");
+  server.send(200, "text/plain", "PidD updated");
   pidD = server.arg("plain").toDouble();
   myPID.SetTunings(pidP, pidI, pidD);
 
@@ -307,6 +362,7 @@ void setup(void){
   server.on("/", handleRoot);
 
   server.on("/json", HTTP_GET, handleJson);
+  server.on("/jsonpid", HTTP_GET, handleJsonPID);
 
   server.on("/cur", HTTP_GET, handleCur);
   server.on("/curpid", HTTP_GET, handleCurPID);
@@ -394,7 +450,7 @@ float CelciusFromOhm(double ohm, int sensor)
   double temp  = factor /(tv[sensor].CM0 + lnR * tv[sensor].CM1 + tv[sensor].CM2 * lnR * lnR * lnR);
   temp  = temp - 273.15; // K -> C
 
-  if (temp > 500)
+  if (temp > 500 || temp < 0)
     temp = 0;
 
   return temp;
@@ -445,7 +501,7 @@ void loop(void){
 
     double rThermistorMeat = ohmFromADC(channel1avg);
 
-    AddTemp(rThermistorAmb, rThermistorMeat);
+    AddTemp(rThermistorAmb, rThermistorMeat, 0 /* angleI */);
 
     numberofsamples = 0;
     channel0accumulator = 0;
@@ -468,6 +524,9 @@ void loop(void){
   int millisNow = millis();
   if (millisTimeLast == 0 || abs(millisNow - millisTimeLast) > (1000 * 10))
   {
+    DEBUG(Serial.println("\nchan0: " + String(channel0)));
+    DEBUG(Serial.println("\nchan1: " + String(channel1)));
+  
     channel0avg = (double)channel0accumulator / (double)numberofsamples;
     channel1avg = (double)channel1accumulator / (double)numberofsamples;
 
@@ -486,7 +545,6 @@ void loop(void){
 
     currentInternalTemp  = farenheightFromCelsius(tempCMeat);
     DEBUG(Serial.println("\nI-tempF: " + String(currentInternalTemp)));
-    AddTemp(currentTemp, currentInternalTemp);
     //Serial.println("\ntemps: " + ReadTemps());
 
     numberofsamples = 0;
@@ -495,10 +553,14 @@ void loop(void){
 
     myPID.Compute();
 
-    int angleI = angle > 105 ? 105 : angle;
+
+    int angleI = floor(angle) > 105 ? 105 : floor(angle);
     angleI = angleI < 0 ? 0 : angleI;
 
-    DEBUG(Serial.println("\nservo angle: " + String(angleI)));
+    AddTemp(currentTemp, currentInternalTemp, angleI);
+
+    DEBUG(Serial.println("\nservo angle: " + String(angle)));
+    DEBUG(Serial.println("\nservo angleI: " + String(angleI)));
 
     myservo.write(angleI);
 
