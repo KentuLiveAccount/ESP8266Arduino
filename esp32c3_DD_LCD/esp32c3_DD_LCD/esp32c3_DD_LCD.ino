@@ -13,14 +13,21 @@ void setup() {
   Serial.println("Starting BLE work!");
 
   pinMode(com0, OUTPUT);
-  pinMode(com1, OUTPUT);
-  pinMode(com2, OUTPUT);
-  pinMode(com3, OUTPUT);
+  pinMode(com1, INPUT_PULLUP);
+  pinMode(com2, INPUT_PULLUP);
+  pinMode(com3, INPUT_PULLUP);
+  digitalWrite(com1, 1);
+  digitalWrite(com2, 1);
+  digitalWrite(com3, 1);
+
+//  pinMode(com1, OUTPUT);
+//  pinMode(com2, OUTPUT);
+//  pinMode(com3, OUTPUT);
   pinMode(pin2, OUTPUT);
   digitalWrite(com0, 0);
-  digitalWrite(com1, 0);
-  digitalWrite(com2, 0);
-  digitalWrite(com3, 0);
+//  digitalWrite(com1, 0);
+//  digitalWrite(com2, 0);
+//  digitalWrite(com3, 0);
   digitalWrite(pin2, 0);
 }
 
@@ -31,9 +38,9 @@ void loop() {
   if (millisLast + 5 < millisNow)
   {
     digitalWrite(com0, fOn ? 1 : 0);
-    digitalWrite(com1, fOn ? 1 : 0);
-    digitalWrite(com2, fOn ? 1 : 0);
-    digitalWrite(com3, fOn ? 1 : 0);
+//    digitalWrite(com1, fOn ? 1 : 0);
+//    digitalWrite(com2, fOn ? 1 : 0);
+//    digitalWrite(com3, fOn ? 1 : 0);
     digitalWrite(pin2, !fOn ? 1 : 0);
 
     fOn = !fOn;
