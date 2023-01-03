@@ -11,8 +11,8 @@ WiFiClient espClient;
 PubSubClient client(espClient);
 
 
-const byte D7 = 13;
-const byte D5 = 14;
+//const byte D7 = 13;
+//const byte D5 = 14;
 
 MLED mled(0, D7, D5); //set intensity=0
 
@@ -67,10 +67,10 @@ void allDots()
     {
         mled.dot(x,y); // draw dot
         mled.display();
-        delay(200);
+        delay(20);
         mled.dot(x,y,0);//clear dot
         mled.display();
-        delay(200);        
+        delay(20);        
     }  
   }
 }
@@ -173,6 +173,8 @@ void setup()
   Serial.begin(115200);
 
   clearBitmap();
+
+  allDots();
 
    WiFi.mode(WIFI_STA); // explicitly set mode, esp defaults to STA+AP
 
