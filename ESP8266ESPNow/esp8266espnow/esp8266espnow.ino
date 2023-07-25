@@ -5,7 +5,7 @@
  in wifisetting.h, define MAC addresses in below format:
 
     byte macAddr1[]={0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-    byte macAddr1[]={0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+    byte macAddr2[]={0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
  */
 // documentation: https://www.espressif.com/sites/default/files/documentation/2c-esp8266_non_os_sdk_api_reference_en.pdf
