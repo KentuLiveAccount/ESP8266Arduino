@@ -16,6 +16,15 @@
 #include <math.h>
 #include "wifisetting.h"
 #include <SPI.h>
+#include "EspMQTTClient.h"
+
+EspMQTTClient mqttClient(
+  WIFINAME,
+  WIFIPW,
+  "192.168.1.100",  // MQTT Broker server ip
+  "BBQ_ESP8266-1"      // Client name that uniquely identify your device
+);
+
 
 
 
@@ -54,13 +63,18 @@ double targetTemp = 100;
 double currentTemp = 0;
 double currentInternalTemp = 0;
 double angle = 0;
-double pidP = 2;
-double pidI = 5;
-double pidD = 1;
+double pidP = 20;
+double pidI = 20;
+double pidD = 100;
 
 PID myPID(&currentTemp, &angle, &targetTemp, pidP, pidI, pidD, DIRECT);
 
 const int led = 2;
+
+//required for some reason...
+void onConnectionEstablished() {
+  Serial.print("Wifi, mqtt connected!");
+}
 
 void AddTemp(int temp, int tempInt, int angleI)
 {
@@ -507,8 +521,17 @@ void loop(void){
     channel0accumulator = 0;
     channel1accumulator = 0;
   }
+
 }
 #else
+
+double minmax(double val, double mn, double mx)
+{
+  if (isnan(val))
+    return mn;
+  return val < mn ? mn : (val > mx ? mx : val);
+}
+
 void loop(void){
   server.handleClient();
   int channel0 = Read3202(tv[amb].pin);
@@ -531,9 +554,9 @@ void loop(void){
     channel1avg = (double)channel1accumulator / (double)numberofsamples;
 
     millisTimeLast = millisNow;
-    double tempCAmb = CelciousFromAdc(channel0avg, amb);
+    double tempCAmb = minmax(CelciousFromAdc(channel0avg, amb), 0.0, 400.0);
 
-    double tempCMeat= CelciousFromAdc(channel1avg, meat);
+    double tempCMeat= minmax(CelciousFromAdc(channel1avg, meat), 0.0, 400.0);
 
     millisTimeLast = millisNow;
     DEBUG(Serial.println("\nX-tempC: " + String(tempCAmb)));
@@ -554,8 +577,9 @@ void loop(void){
     myPID.Compute();
 
 
-    int angleI = floor(angle) > 105 ? 105 : floor(angle);
-    angleI = angleI < 0 ? 0 : angleI;
+    int angleI = floor(minmax(angle, 0.0, 255.0));
+    
+    angleI = angleI * 105 / 255;
 
     AddTemp(currentTemp, currentInternalTemp, angleI);
 
@@ -564,6 +588,14 @@ void loop(void){
 
     myservo.write(angleI);
 
+    mqttClient.publish("bbqtemp/internalTemp", String(intTemps[currentIndex()]));
+    mqttClient.publish("bbqtemp/externalTemp", String(temps[currentIndex()]));
+    mqttClient.publish("test/esptest", String(currentIndex()));
+
+
   }
+
+    mqttClient.loop();
+
 }
 #endif
