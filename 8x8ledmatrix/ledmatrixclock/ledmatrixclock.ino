@@ -3,11 +3,14 @@
 #include <ESP8266WiFi.h>
 #include <WifiClient.h>
 #include <time.h>
+#include <tz.h>
 
 const char *TIME_SERVER ="pool.ntp.org";
-const int myTimeZone = -8 * 60 * 60; //PST (PDT == )
 
 const int EPOCH_1_1_2019 = 1546300800; // 01/01/2019 @ 12:00am (UTC)
+
+unsigned long msecLast;
+unsigned long msecAcc = 0;
 
 time_t now;
 
@@ -130,7 +133,7 @@ void setup() {
   }
 
   Serial.println("wifi started. connecting to ntp server");
-  configTime(myTimeZone, 0, TIME_SERVER);
+  configTime(TZ_America_Los_Angeles, TIME_SERVER);
 
   while (now < EPOCH_1_1_2019)
   {
@@ -141,19 +144,36 @@ void setup() {
 
   Serial.println("setting time");
   setTimeFromNTC();
+  msecLast = millis();
 }
 
-int msecLast = 0;
+const unsigned long error = 1;
 
 void loop() {
-  int msecCur = millis();
+  unsigned long msecCur = millis();
 
-  if (msecLast + 1000 < msecCur)
+  if (msecLast > msecCur)
   {
+    //wrapped around
+    msecAcc += 0xffffffff - msecLast;
+    msecLast = 0;
+  }
+
+  if (msecLast + 100 < msecCur)
+  {
+    msecAcc += msecCur - msecLast;
+
     msecLast = msecCur;
-    addSec(1);
-    updateMatrixDataFromDates();
-    showBitmap(2, matrixData);  
+
+    int sec = msecAcc / (1000 + error);
+    msecAcc = msecAcc % (1000 + error);
+
+    if (sec > 0)
+    {
+      addSec(sec);
+      updateMatrixDataFromDates();
+      showBitmap(2, matrixData);  
+    }
   }
   // put your main code here, to run repeatedly:
   delay(100);
