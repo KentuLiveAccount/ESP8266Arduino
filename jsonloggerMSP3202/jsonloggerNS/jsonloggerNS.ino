@@ -63,9 +63,9 @@ double targetTemp = 100;
 double currentTemp = 0;
 double currentInternalTemp = 0;
 double angle = 0;
-double pidP = 20;
-double pidI = 20;
-double pidD = 100;
+double pidP = 25;
+double pidI = 30;
+double pidD = 10;
 
 PID myPID(&currentTemp, &angle, &targetTemp, pidP, pidI, pidD, DIRECT);
 
