@@ -6,7 +6,7 @@
 
 #include "sampledata.h"
 // sampled data are signed 16bit values
-//const uint16_t BD16[144000] PROGMEM = {
+//const int16_t BD16[144000] PROGMEM = {
 //};
 
 const uint32_t countMax = sizeof(BD16)/sizeof(uint16_t);
@@ -30,16 +30,19 @@ uint32_t counter = 0;
 
 void loop()
 {
- // use pgm_read_word_near to read off of the array in PROGMEM
- int16_t DAC= pgm_read_word_near(BD16 + counter++);
+  // use pgm_read_word_near to read off of the array in PROGMEM
+  int16_t DAC= pgm_read_word_near(BD16 + counter++);
+  
+  if (counter >= countMax)
+    counter = 0;
 
- if (counter >= countMax)
-  counter = 0;
-
- uint32_t left = DAC;
- uint32_t right = DAC;
-
- //left half of the value is the sample value for left, right half is for right
- uint32_t lrv = ((left & 0xffff)) << 16 | (right) & 0xffff;
- i2s_write_sample(lrv);    
+  i2s_write_lr(DAC, DAC);
+  #if 0 // equivalent to i2s_write_lr
+  uint32_t left = DAC;
+  uint32_t right = DAC;
+  
+  //left half of the value is the sample value for left, right half is for right
+  uint32_t lrv = ((left & 0xffff)) << 16 | (right) & 0xffff;
+  i2s_write_sample(lrv);    
+  #endif //0
 }
