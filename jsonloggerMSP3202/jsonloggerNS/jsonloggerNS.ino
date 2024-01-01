@@ -12,7 +12,7 @@
 #include <WiFiManager.h>
 #include <ESP8266WebServer.h>
 #include <Servo.h>
-#include <PID_v1.h>
+#include <PID_v1.h> // from https://github.com/br3ttb/Arduino-PID-Library/
 #include <math.h>
 #include "wifisetting.h"
 #include <SPI.h>
