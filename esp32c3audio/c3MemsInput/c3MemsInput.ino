@@ -53,7 +53,7 @@ void loop()
   if (dumpData)
   {
       // read every 4 data (l and r alternates but only l has data... 
-      the other 2 i don't know)
+      // the other 2 i don't know)
       for (uint32_t j = 0; j < dataMax; j+=4)
         Serial.printf("%d\n", data[j]);
       dumpData = false;
