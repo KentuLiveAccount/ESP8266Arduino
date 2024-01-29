@@ -53,7 +53,7 @@ void i2s_set_rate(uint32_t rate);
 void slc_isr(void *para);
 
 void setup() {
-  Serial.begin(2000000); //115200
+  Serial.begin(115200); //115200
 
   rx_buf_cnt = 0;
 
@@ -74,14 +74,25 @@ void setup() {
 
 uint32_t counter = 0;
 
+int16_t data[20000]={};
+const uint32_t dataMax = sizeof(data)/sizeof(int16_t);
+uint32_t i = 0;
+
 void loop()
 {
   int32_t value;
   char withScale[256];
 
-  if (rx_buf_flag) {
-    for (int x = 0; x < SLC_BUF_LEN; x++) {
-      if (i2s_slc_buf_pntr[rx_buf_idx][x] > 0) {
+  if (rx_buf_flag && i < dataMax)
+  {
+    for (int x = 0; x < SLC_BUF_LEN; x++) 
+    {
+      if (i2s_slc_buf_pntr[rx_buf_idx][x] > 0) 
+      {
+#if 0
+        if (i < dataMax)
+          data[i++] = i2s_slc_buf_pntr[rx_buf_idx][x];
+#else
 #ifndef DEBUG
         Serial.printf("%d\n", i2s_slc_buf_pntr[rx_buf_idx][x]);
         //Serial.print(i2s_slc_buf_pntr[rx_buf_idx][x], BIN);
@@ -91,8 +102,17 @@ void loop()
         sprintf(withScale, "-1 %f 1", (float)value / 4096.0f);
         Serial.println(withScale);
 #endif
+#endif //0
       }
     }
+    rx_buf_flag = false;
+  }
+  else if (i >= dataMax)
+  {
+    for (uint32_t j = 0; j < dataMax; j++)
+      Serial.printf("%d\n", data[j]);
+
+    i = 0;
     rx_buf_flag = false;
   }
 
