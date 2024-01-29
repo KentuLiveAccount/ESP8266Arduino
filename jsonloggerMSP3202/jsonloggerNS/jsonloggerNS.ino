@@ -8,6 +8,11 @@
   Adapted by Earle F. Philhowe
   r, III, from the HelloServer.ino example.
   This example is released into the public domain.
+
+  curl -X POST -H "Content-Type: text/plain" "http://192.168.1.12/settemp" -d "62"
+  curl -X POST -H "Content-Type: text/plain" "http://192.168.1.12/setpidp" -d "0"
+  curl -X POST -H "Content-Type: text/plain" "http://192.168.1.12/setpidi" -d "0"
+  curl -X POST -H "Content-Type: text/plain" "http://192.168.1.12/setpidd" -d "0"
 */
 #include <WiFiManager.h>
 #include <ESP8266WebServer.h>
@@ -346,6 +351,7 @@ void setup(void){
   // then goes into a blocking loop awaiting configuration and will return success result
 
   wm.setSTAStaticIPConfig(IPAddress(192,168,1,4)  /*ip*/, IPAddress(192,168,1,1 /*gw*/), IPAddress(255,255,255,0 /*sn mask*/)); // optional DNS 4th argument
+  //wm.setSTAStaticIPConfig(IPAddress(192,168,1,12)  /*ip*/, IPAddress(192,168,1,1 /*gw*/), IPAddress(255,255,255,0 /*sn mask*/)); // optional DNS 4th argument
 
   bool res;
   res = wm.autoConnect("AutoConnectAP","password"); // password protected ap
