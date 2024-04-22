@@ -9,7 +9,7 @@ void setup() {
   delay(1);
 
   Serial.begin(115200); //115200
-  I2S.setPins(0 /*D1 - SCK*/, 27 /*D2 - FS*/, -1 /*D3 - SDOUT*/, 25 /*D3 - SDIn*/, -1 /*clk*/);
+  I2S.setPins(1 /*D1 - SCK*/, 2 /*D2 - FS*/, -1 /*D3 - SDOUT*/, 3 /*D3 - SDIn*/, -1 /*clk*/);
   if (I2S.begin(I2S_MODE_STD, 96000, I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO))
     Serial.println("I2S begin success");
   else
