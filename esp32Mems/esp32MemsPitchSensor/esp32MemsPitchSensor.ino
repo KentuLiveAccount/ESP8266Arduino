@@ -1,16 +1,30 @@
 #include <Arduino.h>
 #include <WiFi.h> 
-#include <I2S.h>
+#include <ESP_I2S.h>
 
+I2SClass I2S;
 
-//const uint32_t dataMax = 65536 * 1;
-const uint32_t dataMax = 1024 * 1;
-int16_t data[dataMax * 2];
+void setup() {
+  WiFi.disconnect(true /*wifioff*/, false /*eraseap*/);
+  delay(1);
 
-bool dumpData = false;
+  Serial.begin(115200); //115200
+  I2S.setPins(0 /*D1 - SCK*/, 27 /*D2 - FS*/, -1 /*D3 - SDOUT*/, 25 /*D3 - SDIn*/, -1 /*clk*/);
+  if (I2S.begin(I2S_MODE_STD, 96000, I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO))
+    Serial.println("I2S begin success");
+  else
+    Serial.println("I2S begin failed");
+}
+
+//const uint32_t dataMax = 65536 / 2; // /2 to make it fit into default 1.2MB app
+const uint32_t dataMax = 65536 / 2;
+int16_t data[dataMax];
+
+bool dataReady = false;
 byte *pb = (byte *)data;
 const uint32_t cbMax = dataMax * sizeof(int16_t);
 uint32_t cb = cbMax;
+
 
 const uint8_t maxPeaks = 255;
 uint32_t rgPeakIndex[maxPeaks];
@@ -49,7 +63,7 @@ void findPeaks()
   bool fStart = false;
   int16_t prevVal = 0;
   iPeak = 0;
-  for (uint32_t i = 0; i < dataMax; i += 4)
+  for (uint32_t i = 0; i < dataMax; i += 2)
   {
     if (prevVal > data[i]) // declining
     {
@@ -105,17 +119,18 @@ float interpolate(float y0, float y1, float y2)
   return 0;
 }
 
-int16_t data2[]={252,243,199,136,55,-28,-109,-176,-228,-248,-244,-201,-140,-61,27,108,180,235,256,243,207,147,68,-12,-92,-168,-221,-245,-241,-204,-153,-77,16,104,176,228,251,256,231,164,87,8,-73,-145,-209,-240,-236,-205,-156,-88,7,92,164,224,256,263,228,175,107,28,-60,-137,-196,-233,-240,-224,-172,-100,-13,68,144,211,255,260,235,191,119,44,-45,-129,-192,-236,-248,-233,-188,-120,-41,47,131,196,243,256,236,196,128,44,-33,-116,-184,-228,-252,-233,-196,-133,-53,27,116,184,236,256,240,207,144,68,-20,-101,-165,-213,-244,-240,-204,-141,-65,20,107,179,239,263,256,216,168,91,0,-84,-156,-201,-237,-240,-208,-152,-72,7,92,172,227,259,256,228,179,103,16,-68,-140,-200,-236,-245,-216,-169,-96,-9,75,152,211,247,255,228,179,103,27,88,7,-73,-153,-209,-245,-252,-225,-181,-105,-20,63,144,203,247,248,220,171,103,23,-68,-144,-208,-245,-256,-240,-196,-128,-48,44,131,188,231,236,223,180,111,31,-53,-136,-197,-245,-265,-248,-205,-140,-61,27,112,179,231,244,228,192,135,51,-33,-116,-180,-228,-256,-245,-212,-144,-64,20,107,180,231,252,248,215,156,75,-12,-93,-161,-216,-245,-244,-209,-153,-76,11,96,171,228};
-float scores[81]={};
+float scores[256]={};
 
 void interpolateInterval()
 {
+  Serial.printf("InterpolateInterval\n");
+
   float scoreLargest = 0.0;
   uint32_t intervalLargest = 0;
 
-  for (uint32_t interval = 10; interval <= 80; interval++)
+  for (uint32_t interval = 25; interval < 256; interval++)
   {
-    float scoreCur = peakScore(data, dataMax * 2, 4 /*cIncrements*/, interval);
+    float scoreCur = peakScore(data, dataMax, 2 /*cIncrements*/, interval);
 //    float scoreCur = peakScore(data2, 256, 1 /*cIncrements*/, interval);
 
     scores[interval] = scoreCur;
@@ -131,22 +146,25 @@ void interpolateInterval()
 
   float interpolateInterval = intervalLargest;
   
-  if (intervalLargest > 10 && intervalLargest < 79)
+  if (intervalLargest > 25 && intervalLargest < 255)
     interpolateInterval += interpolate(scores[intervalLargest - 1], scores[intervalLargest], scores[intervalLargest + 1]);
 
-  Serial.printf("Largest %d, %f, %f Hz, %f, %f Hz\n", intervalLargest, scoreLargest, 0.501346 * 16000.0 / ((float) intervalLargest), interpolateInterval, 0.501346 * 16000.0 / interpolateInterval);
+  Serial.printf("Largest %d, %f, %f Hz, %f, %f Hz\n", intervalLargest, scoreLargest, 48000.0 / ((float) intervalLargest), interpolateInterval, 48000.0 / interpolateInterval);
 }
 
 
 void dumpPeakScores()
 {
+   Serial.printf("DumpPeakScores\n");
+
   float scoreLargest = 0.0;
+
   uint32_t intervalLargest = 0;
 
-  for (uint32_t interval = 10; interval <= 80; interval++)
+  for (uint32_t interval = 25; interval < 256; interval++)
   {
-//    float scoreCur = peakScore(data, dataMax * 2, 4 /*cIncrements*/, interval);
-    float scoreCur = peakScore(data2, 256, 1 /*cIncrements*/, interval);
+    float scoreCur = peakScore(data, dataMax, 2 /*cIncrements*/, interval);
+//    float scoreCur = peakScore(data2, 256, 1 /*cIncrements*/, interval);
 
     if (scoreCur > scoreLargest)
     {
@@ -157,12 +175,14 @@ void dumpPeakScores()
     Serial.printf("%d, %f\n", interval, scoreCur);
   }
 
-  Serial.printf("Largest %d, %f, %f Hz\n", intervalLargest, scoreLargest, 0.501346 * 16000.0 / ((float) intervalLargest));
+  Serial.printf("Largest %d, %f, %f Hz\n", intervalLargest, scoreLargest, 48000.0 / ((float) intervalLargest));
 }
 
 void dumpPeaks()
 {
   findPeaks();
+
+  Serial.printf("DumpPeaks\n");
 
   if (iPeak < 1)
   {
@@ -177,7 +197,7 @@ void dumpPeaks()
 
 void dumpDataToSerial()
 {
-  for (uint32_t i = 0; i < dataMax; i += 4)
+  for (uint32_t i = 0; i < dataMax; i += 2)
   {
     Serial.printf("%d,", data[i]);
   }
@@ -186,22 +206,22 @@ void dumpDataToSerial()
 
 void dumpDataToSerialRaw()
 {
-  for (uint32_t i = 0; i < dataMax; i += 1)
+  for (uint32_t i = 0; i < dataMax; i += 2)
   {
     Serial.printf("%d,", data[i]);
   }
    Serial.printf("\n");
 }
-
-void readProcess()
+void loop()
 {
-  uint32_t cbFilled = I2S.read((void *)pb, cb);
+
+  uint32_t cbFilled = I2S.readBytes((char *)pb, cb);
 
   if (cb <= cbFilled)
   {
     pb = (byte *)data;
     cb = cbMax;
-    dumpData = true;
+    dataReady = true;
   }
   else
   {
@@ -209,47 +229,14 @@ void readProcess()
     pb += cbFilled;
   }
 
-  if (dumpData)
+  if (dataReady)
   {
-    dumpData = false;
-    dumpDataToSerial();
-    //dumpDataToSerialRaw();
+    //dumpDataToSerial();
+    dumpDataToSerialRaw();
     //dumpPeaks();
-    //dumpPeakScores();
+    dumpPeakScores();
     interpolateInterval();
-    Serial.println("dumpdata");
+
+    dataReady = false;
   }
-  else
-  {
-    Serial.printf("added data: %d bytes\n", cbFilled);
-  }
-}
-
-
-void setup() {
-  WiFi.disconnect(true /*wifioff*/, false /*eraseap*/);
-  delay(1000);
-
-  Serial.begin(115200); //115200
-  I2S.setAllPins(1 /*D1 - SCK*/, 2 /*D2 - FS*/, 3 /*D3 - SDOUT*/, 5 /*D3 - SDOut*/, 3 /*D4 SDIN*/);
-  I2S.setSimplex();
-  I2S.setBufferSize(1024); // set the maximum buffer size
-
-  I2S.onReceive(readProcess);
-
-  if (I2S.isDuplex())
-    Serial.println("duplex mode");
-  else
-    Serial.println("simplex mode");
-
-  if (I2S.begin(I2S_PHILIPS_MODE, 16000, 16)) // begin as Master mode
-    Serial.println("I2S begin success");
-  else
-    Serial.println("I2S begin failed");
-
-  I2S.read(); // Switch the driver in simplex mode to receive
-}
-
-void loop() {
-
 }
