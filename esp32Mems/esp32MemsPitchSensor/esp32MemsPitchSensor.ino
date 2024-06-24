@@ -45,7 +45,7 @@ float peakScore(int16_t* pData, uint32_t cData, uint32_t cIncrements, uint32_t i
   {
     float d1 = *pData;
     float d2 = *pData2;
-    phiSum += abs(d1 * d2);
+    phiSum += d1 * d2;
     psiSum += abs(d1 - d2);
     pData += cIncrements;
     pData2 += cIncrements;
@@ -87,36 +87,32 @@ void findPeaks()
   }
 }
 
-float interpolate(float y0, float y1, float y2)
+void interpolate(float y0, float y1, float y2, float &xPeak, float &yPeak)
 {
-  if (y0 < y2)
+  if (abs(y0) < abs(y2))
   {
-    float slope1 = y1 - y0;
-    float c1 = y0;
-    float slope2 = -1 * slope1;
-    float c2 = y2 - 2 * slope2;
+    if (abs(y1) < abs(y2))
+    {
+      xPeak = 1.0;
+      yPeak = y2;
+      return;
+    }
 
-    float yPeak = (c1 + c2) / 2;
-
-    float xPeak = ((yPeak - c1) / slope1) - 1.0;
-
-    return xPeak;
+    yPeak = (y2 - y0 + y1 + y1) / 2;
+    xPeak = (y2 - y0)/(2 * (y1 - y0));
   }
-  else if (y0 > y2)
+  else if (abs(y0) > abs(y2))
   {
-    float slope2 = y2 - y1; //negative
-    float c2 = y2;
-    float slope1 = -1 * slope2;
-    float c1 = y0 + 2 * slope2;
+    if (abs(y0) > abs(y1))
+    {
+      xPeak = -1.0;
+      yPeak = y0;
+      return;
+    }
 
-    float yPeak = (c1 + c2) / 2;
-
-    float xPeak = ((yPeak - c1) / slope1) + 1.0;
-
-    return xPeak;
+    yPeak = (y0 - y2 + y1 + y1) / 2;
+    xPeak = (y0 - y2)/(2 * (y2 - y1));
   }
-
-  return 0;
 }
 
 float scores[256]={};
@@ -125,8 +121,8 @@ void interpolateInterval()
 {
   Serial.printf("InterpolateInterval\n");
 
-  float scoreLargest = 0.0;
-  uint32_t intervalLargest = 0;
+  float scoreLargest1 = 0.0, scoreLargest2 = 0.0;
+  uint32_t intervalLargest1 = 0, intervalLargest2 = 0;
 
   for (uint32_t interval = 25; interval < 256; interval++)
   {
@@ -135,21 +131,39 @@ void interpolateInterval()
 
     scores[interval] = scoreCur;
 
-    if (scoreCur > scoreLargest)
+    if (scoreCur > scoreLargest1)
     {
-      scoreLargest = scoreCur;
-      intervalLargest = interval;
+      scoreLargest2 = scoreLargest1;
+      intervalLargest2 = intervalLargest1;
+
+      scoreLargest1 = scoreCur;
+      intervalLargest1 = interval;
     }
 
     //Serial.printf("%d, %f\n", interval, scoreCur);
   }
 
-  float interpolateInterval = intervalLargest;
+  float interpolateInterval1 = intervalLargest1;
+  float interpolateInterval2 = intervalLargest2;
   
-  if (intervalLargest > 25 && intervalLargest < 255)
-    interpolateInterval += interpolate(scores[intervalLargest - 1], scores[intervalLargest], scores[intervalLargest + 1]);
+  if (intervalLargest1 > 25 && intervalLargest1 < 255)
+  {
+    float xPeak = 0.0, yPeak = 0.0;
+    interpolate(scores[intervalLargest1 - 1], scores[intervalLargest1], scores[intervalLargest1 + 1], xPeak, yPeak);
+    interpolateInterval1 += xPeak;
+    scoreLargest1 = yPeak;
+  }
 
-  Serial.printf("Largest %d, %f, %f Hz, %f, %f Hz\n", intervalLargest, scoreLargest, 48000.0 / ((float) intervalLargest), interpolateInterval, 48000.0 / interpolateInterval);
+  if (intervalLargest2 > 25 && intervalLargest2 < 255)
+  {
+    float xPeak = 0.0, yPeak = 0.0;
+    interpolate(scores[intervalLargest2 - 1], scores[intervalLargest2], scores[intervalLargest2 + 1], xPeak, yPeak);
+    interpolateInterval2 += xPeak;
+    scoreLargest2 = yPeak;
+  }
+
+  Serial.printf("#1, Largest %d, %f, %f Hz, %f, %f Hz\n", intervalLargest1, scoreLargest1, 48000.0 / ((float) intervalLargest1), interpolateInterval1, 48000.0 / interpolateInterval1);
+  Serial.printf("#2, Largest %d, %f, %f Hz, %f, %f Hz\n", intervalLargest2, scoreLargest2, 48000.0 / ((float) intervalLargest2), interpolateInterval2, 48000.0 / interpolateInterval2);
 }
 
 
@@ -232,7 +246,7 @@ void loop()
   if (dataReady)
   {
     //dumpDataToSerial();
-    dumpDataToSerialRaw();
+    //dumpDataToSerialRaw();
     //dumpPeaks();
     dumpPeakScores();
     interpolateInterval();
