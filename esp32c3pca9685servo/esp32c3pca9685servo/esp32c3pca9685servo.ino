@@ -138,53 +138,45 @@ void sweeplessAnd90(int servo)
 // degree is absolute where 0 is middle
 void moveElbowTo(int servo, int degree)
 {
-  // elbows
-  // rf, lb: zero is up
-  // lf, rb: zero is down
-
   degree = min(90, degree);
   degree = max(-90, degree);
 
-  if (servo == elblowLF || servo == elbowRB)
+  if (servo == elbowLF || servo == elbowRB)
     degree = degree * -1;
 
-  pwm1.setPWM(servo, 325 + (degree * 5 / 2));
+  pwm1.setPWM(servo, 0, 325 + (degree * 5 / 2));
 }
 
 // moves shoulders. negative number is front, positive is back
 // degree is absolute where 0 is middle
 void moveShoulderTo(int servo, int degree)
 {
-  // shoulders
-  // right: zero is towards back
-  // left:  zero is towards front
-
   degree = min(90, degree);
   degree = max(-90, degree);
 
   if (servo == shoulderRF || servo == shoulderRB)
     degree = degree * -1;
 
-  pwm1.setPWM(servo, 325 + (degree * 5 / 2));
+  pwm1.setPWM(servo, 0, 325 + (degree * 5 / 2));
 }
 
 void raiseElbowsAndRest()
 {
-  moveShoulderTo(elbowRF, -30);
+  moveElbowTo(elbowRF, -30);
   delay(1000);
-  moveShoulderTo(elbowRF, 0);
+  moveShoulderTo(shoulderRF, 0);
   delay(1000);
-  moveShoulderTo(elbowRB, -30);
+  moveElbowTo(elbowRB, -30);
   delay(1000);
-  moveShoulderTo(elbowRB, 0);
+  moveShoulderTo(shoulderRB, 0);
   delay(1000);
-  moveShoulderTo(elbowLF, -30);
+  moveElbowTo(elbowLF, -30);
   delay(1000);
-  moveShoulderTo(elbowLF, 0);
+  moveShoulderTo(shoulderLF, 0);
   delay(1000);
-  moveShoulderTo(elbowLB, -30);
+  moveElbowTo(elbowLB, -30);
   delay(1000);
-  moveShoulderTo(elbowLB, 0);
+  moveShoulderTo(shoulderLB, 0);
   delay(1000);
 }
 
@@ -194,6 +186,36 @@ void sweepAndRestAt90Shoulders()
   sweeplessAnd90 (shoulderRB);
   sweeplessAnd90 (shoulderLF);
   sweeplessAnd90 (shoulderLB);
+}
+
+void stepForwardInPair()
+{
+  moveElbowTo(elbowRF, -30);
+  moveElbowTo(elbowLB, -30);
+  delay(50);
+  moveShoulderTo(shoulderRF, -20);
+  moveShoulderTo(shoulderLB, -20);
+  moveShoulderTo(shoulderLF, 20);
+  moveShoulderTo(shoulderRB, 20);
+  delay(50);
+  moveElbowTo(elbowRF, 0);
+  moveElbowTo(elbowLB, 0);
+
+  delay(1000);
+
+  moveElbowTo(elbowLF, -30);
+  moveElbowTo(elbowRB, -30);
+  delay(50);
+  moveShoulderTo(shoulderLF, -20);
+  moveShoulderTo(shoulderRB, -20);
+  moveShoulderTo(shoulderRF, 20);
+  moveShoulderTo(shoulderLB, 20);
+  delay(50);
+  moveElbowTo(elbowLF, 0);
+  moveElbowTo(elbowRB, 0);
+
+  delay(1000);
+
 }
 
 void home()
@@ -212,7 +234,11 @@ void loop()
 {
   home();
   delay(1000);
-  raiseElbowsAndRest();
+  //raiseElbowsAndRest();
+  //delay(1000);
+
+  for (int i = 0; i < 10; i++)
+    stepForwardInPair();
 
   for (;;)
   {
