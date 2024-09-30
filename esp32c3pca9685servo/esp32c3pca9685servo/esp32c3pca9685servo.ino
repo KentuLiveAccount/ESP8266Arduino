@@ -188,35 +188,6 @@ void sweepAndRestAt90Shoulders()
   sweeplessAnd90 (shoulderLB);
 }
 
-void stepForwardInPair()
-{
-  moveElbowTo(elbowRF, -30);
-  moveElbowTo(elbowLB, -30);
-  delay(50);
-  moveShoulderTo(shoulderRF, -20);
-  moveShoulderTo(shoulderLB, -20);
-  moveShoulderTo(shoulderLF, 20);
-  moveShoulderTo(shoulderRB, 20);
-  delay(50);
-  moveElbowTo(elbowRF, 0);
-  moveElbowTo(elbowLB, 0);
-
-  delay(1000);
-
-  moveElbowTo(elbowLF, -30);
-  moveElbowTo(elbowRB, -30);
-  delay(50);
-  moveShoulderTo(shoulderLF, -20);
-  moveShoulderTo(shoulderRB, -20);
-  moveShoulderTo(shoulderRF, 20);
-  moveShoulderTo(shoulderLB, 20);
-  delay(50);
-  moveElbowTo(elbowLF, 0);
-  moveElbowTo(elbowRB, 0);
-
-  delay(1000);
-
-}
 
 void home()
 {
@@ -230,9 +201,166 @@ void home()
   pwm1.setPWM(shoulderLB, 0, 325);  
 }
 
+class CSmartServo
+{
+public:
+  CSmartServo(int iServo):m_iServo(iServo){}
+
+  int relToAbs(int relAngle)
+  {
+    relAngle = min(90, relAngle);
+    relAngle = max(-90, relAngle);
+
+    if (m_iServo == shoulderRF || m_iServo == shoulderRB)
+      relAngle = relAngle * -1;
+    else if (m_iServo == elbowLF || m_iServo == elbowRB)
+      relAngle = relAngle * -1;
+
+    return 325 + (relAngle * 5 / 2);
+  }
+
+  void SetCurAngle(int relAngle)
+  {
+    m_iCurrentPosAbs = relToAbs(relAngle);
+    m_iDestinationPosAbs = m_iCurrentPosAbs;
+  }
+
+  void moveTo(int relAngle, int msecDuration)
+  {
+    relAngle = min(90, relAngle);
+    relAngle = max(-90, relAngle);
+
+    if (m_iServo == shoulderRF || m_iServo == shoulderRB)
+      relAngle = relAngle * -1;
+    else if (m_iServo == elbowLF || m_iServo == elbowRB)
+      relAngle = relAngle * -1;
+
+    int absPos = 325 + (relAngle * 5 / 2);
+
+    m_msecLast = millis();
+    m_msecDuration = msecDuration;
+
+    if (m_msecDuration > 0)
+    {
+      m_iDestinationPosAbs = absPos;
+    }
+    else
+    {
+      m_iCurrentPosAbs = absPos;
+      m_iDestinationPosAbs = absPos;
+      pwm1.setPWM(m_iServo, 0, m_iCurrentPosAbs);
+    }
+  }
+
+  bool loop()
+  {
+    if (m_iCurrentPosAbs == m_iDestinationPosAbs)
+      return false;
+
+    int msecCur = millis();
+
+    int deltaMsec = msecCur - m_msecLast;
+    m_msecLast = msecCur;
+
+    int posDelta = m_iDestinationPosAbs - m_iCurrentPosAbs;
+
+    posDelta = posDelta * deltaMsec / m_msecDuration;
+
+    if (posDelta == 0)
+      m_iCurrentPosAbs = m_iDestinationPosAbs;
+    else
+      m_iCurrentPosAbs += posDelta;
+
+    if (posDelta > 0 && m_iCurrentPosAbs > m_iDestinationPosAbs)
+      m_iCurrentPosAbs = m_iDestinationPosAbs;
+    if (posDelta < 0 && m_iCurrentPosAbs < m_iDestinationPosAbs)
+      m_iCurrentPosAbs = m_iDestinationPosAbs;
+
+    pwm1.setPWM(m_iServo, 0, m_iCurrentPosAbs);
+    return true;
+  }
+private:
+  int m_iServo;
+  int m_iCurrentPosAbs;
+  int m_iDestinationPosAbs;
+  int m_msecDuration;
+  int m_msecLast;
+};
+
+CSmartServo m_rgSv[8] = {elbowRF, elbowRB, elbowLF, elbowLB, shoulderRF, shoulderRB, shoulderLF, shoulderLB};
+
+void finishMove()
+{
+  bool fContinue = true;
+
+  while (fContinue)
+  {
+    fContinue = false;
+    for (int i = 0; i < 8; i++)
+      fContinue |= m_rgSv[i].loop();
+
+    delay(5);
+  }
+}
+
+void readyStepForward()
+{
+  m_rgSv[elbowRF].moveTo(0, 0 /* msecDur */);
+  m_rgSv[elbowLF].moveTo(0, 0 /* msecDur */);
+  m_rgSv[elbowRB].moveTo(0, 0 /* msecDur */);
+  m_rgSv[elbowLB].moveTo(0, 0 /* msecDur */);
+
+  m_rgSv[shoulderRF].moveTo(20, 0 /* msecDur */);
+  m_rgSv[shoulderLB].moveTo(20, 0 /* msecDur */);
+  m_rgSv[shoulderLF].moveTo(-20, 0 /* msecDur */);
+  m_rgSv[shoulderRB].moveTo(-20, 0 /* msecDur */);
+}
+
+void stepForwardInPair()
+{
+  int elbowLift = -30;
+  int msecDuration = 1000;
+  int shoulderForward = -20;
+  int shoulderBack = 20;
+
+  m_rgSv[elbowRF].moveTo(elbowLift, 0 /* msecDur */);
+  m_rgSv[elbowLB].moveTo(elbowLift, 0 /* msecDur */);
+  delay(50);
+
+  m_rgSv[shoulderRF].moveTo(shoulderForward, msecDuration);
+  m_rgSv[shoulderLB].moveTo(shoulderForward, msecDuration);
+  m_rgSv[shoulderLF].moveTo(shoulderBack, msecDuration);
+  m_rgSv[shoulderRB].moveTo(shoulderBack, msecDuration);
+  finishMove();
+
+  delay(50);
+  m_rgSv[elbowRF].moveTo(0, 0 /* msecDur */);
+  m_rgSv[elbowLB].moveTo(0, 0 /* msecDur */);
+
+  delay(1000);
+
+  m_rgSv[elbowLF].moveTo(elbowLift, 0 /* msecDur */);
+  m_rgSv[elbowRB].moveTo(elbowLift, 0 /* msecDur */);
+  delay(50);
+
+  m_rgSv[shoulderLF].moveTo(shoulderForward, msecDuration);
+  m_rgSv[shoulderRB].moveTo(shoulderForward, msecDuration);
+  m_rgSv[shoulderRF].moveTo(shoulderBack, msecDuration);
+  m_rgSv[shoulderLB].moveTo(shoulderBack, msecDuration);
+  finishMove();
+
+  delay(50);
+  m_rgSv[elbowLF].moveTo(0, 0 /* msecDur */);
+  m_rgSv[elbowRB].moveTo(0, 0 /* msecDur */);
+
+  delay(1000);
+}
+
 void loop()
 {
   home();
+  delay(1000);
+  readyStepForward();
   delay(1000);
   //raiseElbowsAndRest();
   //delay(1000);
