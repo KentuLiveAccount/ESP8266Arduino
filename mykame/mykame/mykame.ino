@@ -1,3 +1,25 @@
+/*
+  My Kame
+  
+  ESP32C3 with PCA9685 servo driver breakout
+  BluePad Lolin C3 Mini
+  SG90 servos
+  Staida game controller in BLE mode
+
+  Wiring
+
+  ESP32C3   PCA9685
+  GND    -> GND
+  3V3    -> VCC
+  GPIO5  -> SDA
+  GPIO4  -> SCL
+  3V3    -> OE (via switch: ON -> NO POWER to Device, leave open to power device)
+
+  External power (5V) to V+ and GND to power devices
+
+  Note: observing occasional erratic servo movement. supplying separate power to sservo does not help
+*/
+
 #include <Wire.h>
 #include <Adafruit_PWMServoDriver.h>
 #include <Bluepad32.h>
@@ -167,27 +189,6 @@ void processControllers() {
         }
     }
 }
-/*
-  My Kame
-  
-  ESP32C3 with PCA9685 servo driver breakout
-  BluePad Lolin C3 Mini
-  SG90 servos
-  Staida game controller in BLE mode
-
-  Wiring
-
-  ESP32C3   PCA9685
-  GND    -> GND
-  3V3    -> VCC
-  GPIO5  -> SDA
-  GPIO4  -> SCL
-  3V3    -> OE (via switch: ON -> NO POWER to Device, leave open to power device)
-
-  External power (5V) to V+ and GND to power devices
-
-  Note: observing occasional erratic servo movement. supplying separate power to sservo does not help
-*/
 
 Adafruit_PWMServoDriver pwm1 = Adafruit_PWMServoDriver(0x40, Wire);
 
@@ -250,12 +251,6 @@ public:
   void setThrottle(int throttle)
   {
       m_throttle = throttle;
-      return;
-
-      if (throttle != 0)
-        m_throttle = throttle < 0 ? -100 : 100;
-      else
-        m_throttle = 0;
   }
 
   bool isShoulder() const
@@ -358,12 +353,10 @@ public:
     int msecCur = millis();
     int deltaMsec = msecCur - m_msecLast;
 
-    int msecPerDegreeThrottled = m_msecPerDegree * 100 / abs(m_throttle);
-
     if (angleDelta < 0)
-      angleDelta = max(angleDelta, -1 * deltaMsec / msecPerDegreeThrottled);
+      angleDelta = max(angleDelta, -1 * deltaMsec / m_msecPerDegree);
     else
-      angleDelta = min(angleDelta, deltaMsec / msecPerDegreeThrottled);
+      angleDelta = min(angleDelta, deltaMsec / m_msecPerDegree);
 
     if (angleDelta == 0)
     {
@@ -371,7 +364,7 @@ public:
       return true;
     }
 
-    m_msecLast += abs(angleDelta) * msecPerDegreeThrottled;
+    m_msecLast += abs(angleDelta) * m_msecPerDegree;
     m_curAngle += angleDelta;
 
     if (angleDelta > 0 && m_curAngle > m_destAngle)
