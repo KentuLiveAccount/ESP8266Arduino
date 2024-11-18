@@ -109,8 +109,9 @@ void setup()
   int si4735Addr = si4735.getDeviceI2CAddress(RESET_PIN);
   si4735.setup(RESET_PIN, FM_FUNCTION);
   delay(300);
-  // Starts defaul radio function and band (FM; from 84 to 108 MHz; 103.9 MHz; step 100kHz)
-  si4735.setFM(8400, 10800, 10390, 10);
+
+  // Starts default radio function and band (FM; from 84 to 108 MHz; 103.9 MHz; step 100kHz)
+  si4735.setFM(8400 /* freqMin */, 10800 /* freqMax */, 9490 /*initialFreq*/, 10 /* freqStep */);
   currentFrequency = previousFrequency = si4735.getFrequency();
   si4735.setVolume(45);
   showStatus();
@@ -136,7 +137,7 @@ void loop()
       break;
     case 'f':
     case 'F':
-      si4735.setFM(8600, 10800, 10390, 10);
+      si4735.setFM(8600, 10800, 9490, 10);
       break;
     case '1':
       si4735.setAM(9400, 9990, 9600, 5);
