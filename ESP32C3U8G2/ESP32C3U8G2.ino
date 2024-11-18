@@ -1,4 +1,4 @@
-#include <U8g2lib.h>
+#include <U8g2lib.h> //C:\Users\kentu\Documents\Arduino\libraries\U8g2\src\U8g2lib.h
 #include <Wire.h>
 
 // there is no 72x50 constructor in u8g2 hence the 72x40 screen is mapped in the middle of the 132x64

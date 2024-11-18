@@ -262,19 +262,31 @@ public:
     int deltaMsec = msecCur - m_msecLast;
     m_msecLast = msecCur;
 
-    int posDelta = m_iDestinationPosAbs - m_iCurrentPosAbs;
-
-    posDelta = posDelta * deltaMsec / m_msecDuration;
-
-    if (posDelta == 0)
+    if (m_msecDuration == deltaMsec)
+    {
+      m_msecDuration = 0;
       m_iCurrentPosAbs = m_iDestinationPosAbs;
+    }
     else
+    {
+      int posDelta = m_iDestinationPosAbs - m_iCurrentPosAbs;
+
+      if (posDelta == 0)
+        return false;
+
+      posDelta = posDelta * deltaMsec / m_msecDuration;
+      m_msecDuration -= deltaMsec;
+
+      if (posDelta == 0)
+        return true;
+
       m_iCurrentPosAbs += posDelta;
 
-    if (posDelta > 0 && m_iCurrentPosAbs > m_iDestinationPosAbs)
-      m_iCurrentPosAbs = m_iDestinationPosAbs;
-    if (posDelta < 0 && m_iCurrentPosAbs < m_iDestinationPosAbs)
-      m_iCurrentPosAbs = m_iDestinationPosAbs;
+      if (posDelta > 0 && m_iCurrentPosAbs > m_iDestinationPosAbs)
+        m_iCurrentPosAbs = m_iDestinationPosAbs;
+      if (posDelta < 0 && m_iCurrentPosAbs < m_iDestinationPosAbs)
+        m_iCurrentPosAbs = m_iDestinationPosAbs;
+    }
 
     pwm1.setPWM(m_iServo, 0, m_iCurrentPosAbs);
     return true;
@@ -319,7 +331,7 @@ void readyStepForward()
 void stepForwardInPair()
 {
   int elbowLift = -30;
-  int msecDuration = 1000;
+  int msecDuration = 200;
   int shoulderForward = -20;
   int shoulderBack = 20;
 
@@ -337,7 +349,7 @@ void stepForwardInPair()
   m_rgSv[elbowRF].moveTo(0, 0 /* msecDur */);
   m_rgSv[elbowLB].moveTo(0, 0 /* msecDur */);
 
-  delay(1000);
+  delay(200);
 
   m_rgSv[elbowLF].moveTo(elbowLift, 0 /* msecDur */);
   m_rgSv[elbowRB].moveTo(elbowLift, 0 /* msecDur */);
@@ -353,7 +365,7 @@ void stepForwardInPair()
   m_rgSv[elbowLF].moveTo(0, 0 /* msecDur */);
   m_rgSv[elbowRB].moveTo(0, 0 /* msecDur */);
 
-  delay(1000);
+  delay(200);
 }
 
 void loop()

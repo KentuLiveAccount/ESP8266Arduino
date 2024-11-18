@@ -53,4 +53,6 @@ void writeDAC(uint16_t dac)
 uint8_t phase = 0;
 void loop() {
   writeDAC(0x8000+sine[phase++]);
+  phase++;
+  phase++;
 }
