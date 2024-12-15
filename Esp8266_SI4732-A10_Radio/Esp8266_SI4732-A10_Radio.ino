@@ -87,6 +87,9 @@ void showStatus()
   Serial.print(" Signal:");
   Serial.print(si4735.getCurrentRSSI());
   Serial.println("dBuV]");
+  Serial.print(" Volume:");
+  Serial.print(si4735.getCurrentVolume());
+  Serial.println("[0-63]");
   Serial.flush();
 }
 
@@ -113,7 +116,7 @@ void setup()
   // Starts default radio function and band (FM; from 84 to 108 MHz; 103.9 MHz; step 100kHz)
   si4735.setFM(8400 /* freqMin */, 10800 /* freqMax */, 9490 /*initialFreq*/, 10 /* freqStep */);
   currentFrequency = previousFrequency = si4735.getFrequency();
-  si4735.setVolume(45);
+  si4735.setVolume(55);
   showStatus();
 }
 
