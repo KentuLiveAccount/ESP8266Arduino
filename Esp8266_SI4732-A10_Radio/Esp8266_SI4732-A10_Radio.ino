@@ -33,6 +33,7 @@
 */
 
 #include <SI4735.h>
+#include <ESP8266WiFi.h>
 
 #define RESET_PIN 2           // (GPIO02)
 
@@ -99,6 +100,10 @@ void setup()
   while(!Serial);
   delay(1000);
 
+  WiFi.mode(WIFI_OFF);
+  if (WiFi.getMode() == WIFI_OFF)
+    Serial.println(F("\nWifi mode is WIFI_OFF, until it is explicitly changed"));
+
   digitalWrite(RESET_PIN, HIGH);
   Serial.println("AM and FM station tuning test.");
 
@@ -115,8 +120,9 @@ void setup()
 
   // Starts default radio function and band (FM; from 84 to 108 MHz; 103.9 MHz; step 100kHz)
   si4735.setFM(8400 /* freqMin */, 10800 /* freqMax */, 9490 /*initialFreq*/, 10 /* freqStep */);
+  si4735.setFmStereoOn();
   currentFrequency = previousFrequency = si4735.getFrequency();
-  si4735.setVolume(55);
+  si4735.setVolume(63);
   showStatus();
 }
 
