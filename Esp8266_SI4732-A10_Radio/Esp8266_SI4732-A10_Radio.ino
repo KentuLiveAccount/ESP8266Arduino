@@ -34,12 +34,29 @@
 
 #include <SI4735.h>
 #include <ESP8266WiFi.h>
+#include<ezButton.h>  
 
-#define RESET_PIN 2           // (GPIO02)
+// the library to use for SW pin
+#define CLK_PIN 12 //D6
+#define DT_PIN 14  // D5
+#define SW_PIN 16  // D0
+
+#define DIRECTION_CW 0   // clockwise direction
+#define DIRECTION_CCW 1  // counter-clockwise direction
+
+int counter = 0;
+int direction= DIRECTION_CW;
+int CLK_state;
+int prev_CLK_state;
+
+ezButton button(SW_PIN);  // create ezButton object that attach to pin 4
+
+
+#define RESET_PIN 2           // (GPIO02/D4)
 
 // I2C bus pin on ESP32
-#define ESP32_I2C_SDA 4       // (GPIO04)
-#define ESP32_I2C_SCL 5       // (GPIO05)
+#define ESP32_I2C_SDA 4       // (GPIO04/D2)
+#define ESP32_I2C_SCL 5       // (GPIO05/D1)
 
 #define AM_FUNCTION 1
 #define FM_FUNCTION 0
@@ -104,12 +121,18 @@ void setup()
   if (WiFi.getMode() == WIFI_OFF)
     Serial.println(F("\nWifi mode is WIFI_OFF, until it is explicitly changed"));
 
+  // configure encoder pins as inputs
+  pinMode(CLK_PIN, INPUT);
+  pinMode(DT_PIN, INPUT);
+  button.setDebounceTime(50);  // set debounce time to 50 milliseconds
+  // read the initial state of the rotary encoder's CLK pin
+  prev_CLK_state = digitalRead(CLK_PIN);
+
   digitalWrite(RESET_PIN, HIGH);
   Serial.println("AM and FM station tuning test.");
 
   showHelp();
   
-
   // The line below may be necessary to setup I2C pins on ESP32
   Wire.begin(ESP32_I2C_SDA, ESP32_I2C_SCL);
 
@@ -129,6 +152,53 @@ void setup()
 // Main
 void loop()
 {
+  button.loop();  // MUST call the loop() function first
+
+  // read the current state of the rotary encoder's CLK pin
+  CLK_state = digitalRead(CLK_PIN);
+
+  // If the state of CLK is changed, then pulse occurred
+  // React to only the rising edge (from LOW to HIGH) to avoid double count
+  if (CLK_state != prev_CLK_state && CLK_state == HIGH)
+  {
+    // if the DT state is HIGH
+    // the encoder is rotating in counter-clockwise direction => decrease the counter
+    if(digitalRead(DT_PIN) == HIGH)
+    {
+      counter--;
+      direction= DIRECTION_CCW;
+    }
+    else
+    {
+      // the encoder is rotating in clockwise direction => increase the counter
+      counter++;
+      direction= DIRECTION_CW;
+    }
+
+    Serial.print("DIRECTION: ");
+    if(direction== DIRECTION_CW)
+    {
+      Serial.print("Clockwise");
+      si4735.frequencyUp();
+    }
+    else
+    {
+      Serial.print("Counter-clockwise");
+      si4735.frequencyDown();
+    }
+
+    Serial.print(" | COUNTER: ");
+    Serial.println(counter);
+  }
+
+  // save last CLK state
+  prev_CLK_state = CLK_state;
+
+  if(button.isPressed())
+  {
+    Serial.println("The button is pressed");
+  }
+
   if (Serial.available() > 0)
   {
     char key = Serial.read();
