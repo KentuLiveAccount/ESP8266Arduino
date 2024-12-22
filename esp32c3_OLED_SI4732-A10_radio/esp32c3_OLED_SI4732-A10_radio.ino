@@ -33,7 +33,9 @@
 */
 
 #include <SI4735.h>
+#include <BLEDevice.h>
 #include<ezButton.h>  
+#include <WiFi.h>
 
 // the library to use for SW pin
 #define CLK_PIN 1 //GPIO1
@@ -43,8 +45,6 @@
 #define DIRECTION_CW 0   // clockwise direction
 #define DIRECTION_CCW 1  // counter-clockwise direction
 
-int counter = 0;
-int direction= DIRECTION_CW;
 int CLK_state;
 int prev_CLK_state;
 
@@ -111,29 +111,12 @@ void showStatus()
   Serial.flush();
 }
 
-void setup()
+void setupSI4732()
 {
-  Serial.begin(9600);
-  while(!Serial);
-    delay(1000);
-
-  #if 0
-  WiFi.mode(WIFI_OFF);
-  if (WiFi.getMode() == WIFI_OFF)
-    Serial.println(F("\nWifi mode is WIFI_OFF, until it is explicitly changed"));
-  #endif //0
-
-  // configure encoder pins as inputs
-  pinMode(CLK_PIN, INPUT);
-  pinMode(DT_PIN, INPUT);
-  button.setDebounceTime(50);  // set debounce time to 50 milliseconds
-  // read the initial state of the rotary encoder's CLK pin
-  prev_CLK_state = digitalRead(CLK_PIN);
-
   digitalWrite(RESET_PIN, HIGH);
   Serial.println("AM and FM station tuning test.");
 
-//  showHelp();
+  showHelp();
   
   // The line below may be necessary to setup I2C pins on ESP32
   Wire.begin(ESP32_I2C_SDA, ESP32_I2C_SCL);
@@ -148,6 +131,30 @@ void setup()
   si4735.setFmStereoOn();
   currentFrequency = previousFrequency = si4735.getFrequency();
   si4735.setVolume(63);
+}
+
+void setupRotaryEncoder()
+{
+  // configure encoder pins as inputs
+  pinMode(CLK_PIN, INPUT);
+  pinMode(DT_PIN, INPUT);
+  button.setDebounceTime(50);  // set debounce time to 50 milliseconds
+  // read the initial state of the rotary encoder's CLK pin
+  prev_CLK_state = digitalRead(CLK_PIN);
+}
+
+void setup()
+{
+  Serial.begin(9600);
+  while(!Serial);
+    delay(1000);
+  
+  WiFi.mode( WIFI_MODE_NULL );
+
+  setupRotaryEncoder();
+
+  setupSI4732();
+
   showStatus();
 
   //while(true);
@@ -169,30 +176,15 @@ void loop()
     // the encoder is rotating in counter-clockwise direction => decrease the counter
     if(digitalRead(DT_PIN) == HIGH)
     {
-      counter--;
-      direction= DIRECTION_CCW;
+      // direction= DIRECTION_CCW;
+      si4735.frequencyDown();
     }
     else
     {
       // the encoder is rotating in clockwise direction => increase the counter
-      counter++;
-      direction= DIRECTION_CW;
-    }
-
-    //Serial.print("DIRECTION: ");
-    if(direction== DIRECTION_CW)
-    {
-      //Serial.print("Clockwise");
+      // direction= DIRECTION_CW;
       si4735.frequencyUp();
     }
-    else
-    {
-      //Serial.print("Counter-clockwise");
-      si4735.frequencyDown();
-    }
-
-    //Serial.print(" | COUNTER: ");
-    //Serial.println(counter);
   }
 
   // save last CLK state
