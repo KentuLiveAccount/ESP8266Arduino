@@ -32,14 +32,17 @@
   By Ricardo Lima Caratti, May 2021.
 */
 
-#include <SI4735.h>
-#include <BLEDevice.h>
-#include<ezButton.h>  
-#include <WiFi.h>
+#define WIRE_INTERFACES_COUNT 2
 
-// the library to use for SW pin
+#include <SI4735.h>
+//#include <BLEDevice.h>
+#include <ezButton.h>  
+#include <WiFi.h>
+#include <U8g2lib.h> //C:\Users\kentu\Documents\Arduino\libraries\U8g2\src\U8g2lib.h
+
+// rotary encoder
 #define CLK_PIN 1 //GPIO1
-#define DT_PIN 2  // GPIO5
+#define DT_PIN 2  // GPIO2
 #define SW_PIN 0  // GPIO0
 
 #define DIRECTION_CW 0   // clockwise direction
@@ -50,7 +53,14 @@ int prev_CLK_state;
 
 ezButton button(SW_PIN);  // create ezButton object that attach to pin 4
 
+// OLED SH1106
 
+//U8G2_SH1106_72X40_WISE_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE, 6 /*SCL*/, 5/*SDA*/);
+//U8G2_SH1106_72X40_WISE_F_2ND_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE, 6 /*SCL*/, 5/*SDA*/);
+int width = 72;
+int height = 40;
+
+// SI 4732
 #define RESET_PIN 10           // (GPIO10/10)
 
 // I2C bus pin on ESP32
@@ -83,7 +93,6 @@ void showHelp()
 // Show current frequency
 void showStatus()
 {
-  return;
   si4735.getStatus();
   si4735.getCurrentReceivedSignalQuality();
   Serial.print("You are tuned on ");
@@ -111,6 +120,34 @@ void showStatus()
   Serial.flush();
 }
 
+void outputFrequencyToOLED()
+{
+  U8G2_SH1106_72X40_WISE_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE, 6 /*SCL*/, 5/*SDA*/);
+  u8g2.begin();
+  u8g2.setContrast(255);
+
+  u8g2.setBusClock(400000); //400kHz I2C
+  u8g2.setFont(u8g2_font_logisoso26_tf);
+
+  u8g2.clearBuffer();
+  u8g2.drawFrame(0, 0, width, height);
+  u8g2.setCursor(0, 33);
+  int aboveDecimal = currentFrequency / 100; 
+
+  if (aboveDecimal < 100)
+    u8g2.printf(" %d", aboveDecimal);
+  else
+    u8g2.printf("%d", aboveDecimal);
+    
+  u8g2.setCursor(49, 33);
+  u8g2.printf(".");
+  u8g2.setCursor(55, 33);
+  int belowDecimal = (currentFrequency - aboveDecimal * 100) / 10;
+  u8g2.printf("%d", belowDecimal);
+  u8g2.sendBuffer();
+
+  Wire.end();
+}
 void setupSI4732()
 {
   digitalWrite(RESET_PIN, HIGH);
@@ -131,6 +168,10 @@ void setupSI4732()
   si4735.setFmStereoOn();
   currentFrequency = previousFrequency = si4735.getFrequency();
   si4735.setVolume(63);
+
+  showStatus();
+
+  Wire.end();
 }
 
 void setupRotaryEncoder()
@@ -141,6 +182,18 @@ void setupRotaryEncoder()
   button.setDebounceTime(50);  // set debounce time to 50 milliseconds
   // read the initial state of the rotary encoder's CLK pin
   prev_CLK_state = digitalRead(CLK_PIN);
+}
+
+void setupOLED()
+{
+  #if 0
+  return;
+  u8g2.begin();
+  u8g2.setContrast(255);
+
+  u8g2.setBusClock(400000); //400kHz I2C
+  u8g2.setFont(u8g2_font_logisoso26_tf);
+  #endif //0
 }
 
 void setup()
@@ -155,9 +208,9 @@ void setup()
 
   setupSI4732();
 
-  showStatus();
+  setupOLED();
 
-  //while(true);
+  outputFrequencyToOLED();
 }
 
 // Main
@@ -168,10 +221,13 @@ void loop()
   // read the current state of the rotary encoder's CLK pin
   CLK_state = digitalRead(CLK_PIN);
 
+  Wire.begin(ESP32_I2C_SDA, ESP32_I2C_SCL);
+
   // If the state of CLK is changed, then pulse occurred
   // React to only the rising edge (from LOW to HIGH) to avoid double count
   if (CLK_state != prev_CLK_state && CLK_state == HIGH)
   {
+
     // if the DT state is HIGH
     // the encoder is rotating in counter-clockwise direction => decrease the counter
     if(digitalRead(DT_PIN) == HIGH)
@@ -261,10 +317,19 @@ void loop()
   currentFrequency = si4735.getCurrentFrequency();
   if (currentFrequency != previousFrequency)
   {
-    previousFrequency = currentFrequency;
     showStatus();
-    delay(300);
   }
+
+  Wire.end();
+
+  if (currentFrequency != previousFrequency)
+  {
+    previousFrequency = currentFrequency;
+    outputFrequencyToOLED();
+
+    //delay(300);
+  }
+
 
   delay(5);
 }
