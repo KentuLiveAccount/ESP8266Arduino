@@ -74,6 +74,15 @@ uint16_t currentFrequency;
 uint16_t previousFrequency;
 uint8_t bandwidthIdx = 0;
 const char *bandwidth[] = {"6", "4", "3", "2", "1", "1.8", "2.5"};
+enum band {
+  fm = 0,
+  am = 1,
+  lw = 2,
+  line = 3,
+  band_count = 4
+};
+
+uint8_t curBand = fm;
 
 SI4735 si4735;
 
@@ -132,18 +141,35 @@ void outputFrequencyToOLED()
   u8g2.clearBuffer();
   u8g2.drawFrame(0, 0, width, height);
   u8g2.setCursor(0, 33);
-  int aboveDecimal = currentFrequency / 100; 
 
-  if (aboveDecimal < 100)
-    u8g2.printf(" %d", aboveDecimal);
+  if (curBand == line)
+  {
+    u8g2.printf("LINE");
+  }
+  else if (curBand == fm)
+  {
+    int aboveDecimal = currentFrequency / 100; 
+
+    if (aboveDecimal < 100)
+      u8g2.printf(" %d", aboveDecimal);
+    else
+      u8g2.printf("%d", aboveDecimal);
+      
+    u8g2.setCursor(49, 33);
+    u8g2.printf(".");
+    u8g2.setCursor(55, 33);
+    int belowDecimal = (currentFrequency - aboveDecimal * 100) / 10;
+    u8g2.printf("%d", belowDecimal);
+  }
+  else if (currentFrequency < 1000)
+  {
+    u8g2.printf(" %d", currentFrequency);
+  }
   else
-    u8g2.printf("%d", aboveDecimal);
-    
-  u8g2.setCursor(49, 33);
-  u8g2.printf(".");
-  u8g2.setCursor(55, 33);
-  int belowDecimal = (currentFrequency - aboveDecimal * 100) / 10;
-  u8g2.printf("%d", belowDecimal);
+  {
+    u8g2.printf("%d", currentFrequency);
+  }
+
   u8g2.sendBuffer();
 
   Wire.end();
@@ -177,23 +203,12 @@ void setupSI4732()
 void setupRotaryEncoder()
 {
   // configure encoder pins as inputs
-  pinMode(CLK_PIN, INPUT);
-  pinMode(DT_PIN, INPUT);
+  pinMode(CLK_PIN, INPUT_PULLUP);
+  pinMode(DT_PIN, INPUT_PULLUP);
+  pinMode(SW_PIN, INPUT_PULLUP);
   button.setDebounceTime(50);  // set debounce time to 50 milliseconds
   // read the initial state of the rotary encoder's CLK pin
   prev_CLK_state = digitalRead(CLK_PIN);
-}
-
-void setupOLED()
-{
-  #if 0
-  return;
-  u8g2.begin();
-  u8g2.setContrast(255);
-
-  u8g2.setBusClock(400000); //400kHz I2C
-  u8g2.setFont(u8g2_font_logisoso26_tf);
-  #endif //0
 }
 
 void setup()
@@ -208,10 +223,84 @@ void setup()
 
   setupSI4732();
 
-  setupOLED();
-
   outputFrequencyToOLED();
 }
+
+void handleSerialInput()
+{
+  if (Serial.available() <= 0)
+    return;
+
+  char key = Serial.read();
+  switch (key)
+  {
+  case '+':
+    si4735.volumeUp();
+    break;
+  case '-':
+    si4735.volumeDown();
+    break;
+  case 'a':
+  case 'A':
+    si4735.setVolume(63);
+    si4735.setAM(570, 1710, 810, 10);
+    break;
+  case 'f':
+  case 'F':
+    si4735.setVolume(63);
+    si4735.setFM(8600, 10800, 9490, 10);
+    si4735.setFmStereoOn();
+
+    break;
+  case '1':
+    si4735.setVolume(63);
+    si4735.setAM(9400, 9990, 9600, 5);
+    break;
+  case 'U':
+  case 'u':
+    si4735.frequencyUp();
+    break;
+  case 'D':
+  case 'd':
+    si4735.frequencyDown();
+    break;
+  case 'b':
+  case 'B':
+    if (si4735.isCurrentTuneFM())
+    {
+      Serial.println("Not valid for FM");
+    }
+    else
+    {
+      if (bandwidthIdx > 6)
+        bandwidthIdx = 0;
+      si4735.setBandwidth(bandwidthIdx, 1);
+      //Serial.print("Filter - Bandwidth: ");
+      //Serial.print(String(bandwidth[bandwidthIdx]));
+      //Serial.println(" kHz");
+      bandwidthIdx++;
+    }
+    break;
+  case 'S':
+    si4735.seekStationUp();
+    break;
+  case 's':
+    si4735.seekStationDown();
+    break;
+  case '0':
+    showStatus();
+    break;
+  case '?':
+    showHelp();
+    break;
+  default:
+    break;
+  }
+}
+
+int deltaCount = 0;
+const unsigned int c_FreqUpdateInterval = 250;
+unsigned int millisFrequencyUpdateStart;
 
 // Main
 void loop()
@@ -221,25 +310,25 @@ void loop()
   // read the current state of the rotary encoder's CLK pin
   CLK_state = digitalRead(CLK_PIN);
 
-  Wire.begin(ESP32_I2C_SDA, ESP32_I2C_SCL);
-
   // If the state of CLK is changed, then pulse occurred
   // React to only the rising edge (from LOW to HIGH) to avoid double count
   if (CLK_state != prev_CLK_state && CLK_state == HIGH)
   {
+    if (millisFrequencyUpdateStart == 0)
+      millisFrequencyUpdateStart = millis();
 
     // if the DT state is HIGH
     // the encoder is rotating in counter-clockwise direction => decrease the counter
     if(digitalRead(DT_PIN) == HIGH)
     {
       // direction= DIRECTION_CCW;
-      si4735.frequencyDown();
+      deltaCount -= 1;
     }
     else
     {
       // the encoder is rotating in clockwise direction => increase the counter
       // direction= DIRECTION_CW;
-      si4735.frequencyUp();
+      deltaCount += 1;
     }
   }
 
@@ -248,88 +337,72 @@ void loop()
 
   if(button.isPressed())
   {
-   // Serial.println("The button is pressed");
-  }
+    Serial.println("The button is pressed");
+    Wire.begin(ESP32_I2C_SDA, ESP32_I2C_SCL);
 
-  if (Serial.available() > 0)
-  {
-    char key = Serial.read();
-    switch (key)
+    curBand = (curBand + 1) % band_count;
+    switch (curBand)
     {
-    case '+':
-      si4735.volumeUp();
-      break;
-    case '-':
-      si4735.volumeDown();
-      break;
-    case 'a':
-    case 'A':
+    case am:
+      si4735.setVolume(63);
       si4735.setAM(570, 1710, 810, 10);
       break;
-    case 'f':
-    case 'F':
+    case fm:
+      si4735.setVolume(63);
       si4735.setFM(8600, 10800, 9490, 10);
+      si4735.setFmStereoOn();
       break;
-    case '1':
+    case lw:
+      si4735.setVolume(63);
       si4735.setAM(9400, 9990, 9600, 5);
       break;
-    case 'U':
-    case 'u':
-      si4735.frequencyUp();
-      break;
-    case 'D':
-    case 'd':
-      si4735.frequencyDown();
-      break;
-    case 'b':
-    case 'B':
-      if (si4735.isCurrentTuneFM())
-      {
-        Serial.println("Not valid for FM");
-      }
-      else
-      {
-        if (bandwidthIdx > 6)
-          bandwidthIdx = 0;
-        si4735.setBandwidth(bandwidthIdx, 1);
-        //Serial.print("Filter - Bandwidth: ");
-        //Serial.print(String(bandwidth[bandwidthIdx]));
-        //Serial.println(" kHz");
-        bandwidthIdx++;
-      }
-      break;
-    case 'S':
-      si4735.seekStationUp();
-      break;
-    case 's':
-      si4735.seekStationDown();
-      break;
-    case '0':
-      showStatus();
-      break;
-    case '?':
-      showHelp();
-      break;
-    default:
+    case line:
+      si4735.setVolume(0);
       break;
     }
-  }
-  currentFrequency = si4735.getCurrentFrequency();
-  if (currentFrequency != previousFrequency)
-  {
-    showStatus();
-  }
 
-  Wire.end();
+    if (curBand == line)
+      currentFrequency = 0;
+    else
+      currentFrequency = si4735.getCurrentFrequency();
+
+    showStatus();
+    Wire.end();
+  }
+  else if (millisFrequencyUpdateStart > 0)
+  {
+    if (millisFrequencyUpdateStart + c_FreqUpdateInterval < millis())
+    {
+      millisFrequencyUpdateStart = 0;
+
+      if (deltaCount != 0)
+      {
+        currentFrequency += deltaCount * 10;
+        deltaCount = 0;
+
+        Wire.begin(ESP32_I2C_SDA, ESP32_I2C_SCL);
+        si4735.setFrequency(currentFrequency);
+        currentFrequency = si4735.getCurrentFrequency();
+        showStatus();
+        Wire.end();
+      }
+    }
+  }
+  else if (Serial.available() > 0)
+  {
+    Wire.begin(ESP32_I2C_SDA, ESP32_I2C_SCL);
+    handleSerialInput();
+    currentFrequency = si4735.getCurrentFrequency();
+    showStatus();
+    Wire.end();
+  }
 
   if (currentFrequency != previousFrequency)
   {
     previousFrequency = currentFrequency;
     outputFrequencyToOLED();
-
-    //delay(300);
   }
 
 
-  delay(5);
+  delay(1);
 }
