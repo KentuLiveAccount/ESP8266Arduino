@@ -208,7 +208,7 @@ void setupRotaryEncoder()
   pinMode(SW_PIN, INPUT_PULLUP);
   button.setDebounceTime(50);  // set debounce time to 50 milliseconds
   // read the initial state of the rotary encoder's CLK pin
-  prev_CLK_state = digitalRead(CLK_PIN);
+  CLK_state = prev_CLK_state = digitalRead(CLK_PIN);
 }
 
 void setup()
