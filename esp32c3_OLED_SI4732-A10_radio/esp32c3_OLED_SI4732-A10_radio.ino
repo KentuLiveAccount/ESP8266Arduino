@@ -45,12 +45,6 @@
 #define DT_PIN 2  // GPIO2
 #define SW_PIN 0  // GPIO0
 
-#define DIRECTION_CW 0   // clockwise direction
-#define DIRECTION_CCW 1  // counter-clockwise direction
-
-int CLK_state;
-int prev_CLK_state;
-
 ezButton button(SW_PIN);  // create ezButton object that attach to pin 4
 
 // OLED SH1106
@@ -133,6 +127,7 @@ void outputFrequencyToOLED()
 {
   U8G2_SH1106_72X40_WISE_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE, 6 /*SCL*/, 5/*SDA*/);
   u8g2.begin();
+  u8g2.sleepOff();
   u8g2.setContrast(255);
 
   u8g2.setBusClock(400000); //400kHz I2C
@@ -174,6 +169,15 @@ void outputFrequencyToOLED()
 
   Wire.end();
 }
+
+void sleepOLED()
+{
+  U8G2_SH1106_72X40_WISE_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE, 6 /*SCL*/, 5/*SDA*/);
+  u8g2.begin();
+  u8g2.sleepOn();
+
+  Wire.end();
+}
 void setupSI4732()
 {
   digitalWrite(RESET_PIN, HIGH);
@@ -200,15 +204,49 @@ void setupSI4732()
   Wire.end();
 }
 
+volatile int deltaCount = 0;
+const unsigned int c_FreqUpdateInterval = 250;
+volatile unsigned int millisFrequencyUpdateStart;
+unsigned int millisCalled = 0;
+unsigned int millisLastButtonReaction = 0;
+
+void IRAM_ATTR isr_CLK_Rise()
+{
+  //noInterrupts();
+  unsigned int millisNow = millis();
+  if (millisFrequencyUpdateStart == 0)
+    millisFrequencyUpdateStart = millisNow;
+
+  // debounce
+  if (millisCalled + 5 > millisNow)
+    return;
+
+  millisCalled = millisNow;
+   
+  // if the DT state is HIGH
+  // the encoder is rotating in counter-clockwise direction => decrease the counter
+  if (digitalRead(DT_PIN) == HIGH)
+  {
+    // direction= DIRECTION_CCW;
+    deltaCount -= 1;
+  }
+  else
+  {
+    // the encoder is rotating in clockwise direction => increase the counter
+    // direction= DIRECTION_CW;
+    deltaCount += 1;
+  }
+  //interrupts();
+}
+
 void setupRotaryEncoder()
 {
   // configure encoder pins as inputs
   pinMode(CLK_PIN, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(CLK_PIN), isr_CLK_Rise, RISING);
   pinMode(DT_PIN, INPUT_PULLUP);
   pinMode(SW_PIN, INPUT_PULLUP);
   button.setDebounceTime(50);  // set debounce time to 50 milliseconds
-  // read the initial state of the rotary encoder's CLK pin
-  CLK_state = prev_CLK_state = digitalRead(CLK_PIN);
 }
 
 void setup()
@@ -298,45 +336,19 @@ void handleSerialInput()
   }
 }
 
-int deltaCount = 0;
-const unsigned int c_FreqUpdateInterval = 250;
-unsigned int millisFrequencyUpdateStart;
-
 // Main
 void loop()
 {
   button.loop();  // MUST call the loop() function first
 
-  // read the current state of the rotary encoder's CLK pin
-  CLK_state = digitalRead(CLK_PIN);
+  noInterrupts ();
+  int deltaCountLocal = deltaCount;
+  unsigned int millisFrequencyUpdateStartLocal = millisFrequencyUpdateStart;
+  interrupts();
 
-  // If the state of CLK is changed, then pulse occurred
-  // React to only the rising edge (from LOW to HIGH) to avoid double count
-  if (CLK_state != prev_CLK_state && CLK_state == HIGH)
+  if(button.isPressed() && (millisLastButtonReaction + 1000 < millis()))
   {
-    if (millisFrequencyUpdateStart == 0)
-      millisFrequencyUpdateStart = millis();
-
-    // if the DT state is HIGH
-    // the encoder is rotating in counter-clockwise direction => decrease the counter
-    if(digitalRead(DT_PIN) == HIGH)
-    {
-      // direction= DIRECTION_CCW;
-      deltaCount -= 1;
-    }
-    else
-    {
-      // the encoder is rotating in clockwise direction => increase the counter
-      // direction= DIRECTION_CW;
-      deltaCount += 1;
-    }
-  }
-
-  // save last CLK state
-  prev_CLK_state = CLK_state;
-
-  if(button.isPressed())
-  {
+    millisLastButtonReaction = millis();
     Serial.println("The button is pressed");
     Wire.begin(ESP32_I2C_SDA, ESP32_I2C_SCL);
 
@@ -369,15 +381,17 @@ void loop()
     showStatus();
     Wire.end();
   }
-  else if (millisFrequencyUpdateStart > 0)
+  else if (millisFrequencyUpdateStartLocal > 0)
   {
-    if (millisFrequencyUpdateStart + c_FreqUpdateInterval < millis())
+    if (millisFrequencyUpdateStartLocal + c_FreqUpdateInterval < millis())
     {
       millisFrequencyUpdateStart = 0;
 
-      if (deltaCount != 0)
+      if (deltaCountLocal != 0)
       {
-        currentFrequency += deltaCount * 10;
+        Serial.printf(" deltacount: %d\n",deltaCountLocal);
+
+        currentFrequency += deltaCountLocal * 10;
         deltaCount = 0;
 
         Wire.begin(ESP32_I2C_SDA, ESP32_I2C_SCL);
@@ -402,7 +416,11 @@ void loop()
     previousFrequency = currentFrequency;
     outputFrequencyToOLED();
   }
+  else
+  {
+    //sleepOLED();
+  }
 
 
-  delay(1);
+  delay(100);
 }
