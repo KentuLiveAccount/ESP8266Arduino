@@ -205,10 +205,14 @@ void setupSI4732()
 }
 
 volatile int deltaCount = 0;
-const unsigned int c_FreqUpdateInterval = 250;
-volatile unsigned int millisFrequencyUpdateStart;
+const unsigned int c_FreqUpdateInterval = 250; // duration of time rotary encorder motion accumulates
+volatile unsigned int millisFrequencyUpdateStart; // used to coalesce the rotary encoder changes
+volatile unsigned int millisStartDisplay = 0;
 unsigned int millisCalled = 0;
-unsigned int millisLastButtonReaction = 0;
+unsigned int millisCalledSW = 0;
+unsigned int millisLastButtonReaction = 0; // used to avoid reacting to one button presses mupltiple times
+
+volatile int button_press = 0;
 
 void IRAM_ATTR isr_CLK_Rise()
 {
@@ -216,6 +220,8 @@ void IRAM_ATTR isr_CLK_Rise()
   unsigned int millisNow = millis();
   if (millisFrequencyUpdateStart == 0)
     millisFrequencyUpdateStart = millisNow;
+
+  millisStartDisplay = millisNow;
 
   // debounce
   if (millisCalled + 5 > millisNow)
@@ -239,6 +245,19 @@ void IRAM_ATTR isr_CLK_Rise()
   //interrupts();
 }
 
+void IRAM_ATTR isr_SW_Fall()
+{
+  unsigned int millisNow = millis();
+
+  millisStartDisplay = millisNow;
+
+  // debounce
+  if (millisCalledSW + 5 > millisNow)
+    return;
+
+  button_press++;
+}
+
 void setupRotaryEncoder()
 {
   // configure encoder pins as inputs
@@ -246,6 +265,7 @@ void setupRotaryEncoder()
   attachInterrupt(digitalPinToInterrupt(CLK_PIN), isr_CLK_Rise, RISING);
   pinMode(DT_PIN, INPUT_PULLUP);
   pinMode(SW_PIN, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(SW_PIN), isr_SW_Fall, FALLING);
   button.setDebounceTime(50);  // set debounce time to 50 milliseconds
 }
 
@@ -344,33 +364,46 @@ void loop()
   noInterrupts ();
   int deltaCountLocal = deltaCount;
   unsigned int millisFrequencyUpdateStartLocal = millisFrequencyUpdateStart;
+  bool button_press_local = button_press;
+  unsigned int millisStartDisplayLocal = millisStartDisplay;
   interrupts();
 
-  if(button.isPressed() && (millisLastButtonReaction + 1000 < millis()))
+  if (millisStartDisplayLocal > 0 && millisStartDisplayLocal + 10000 < millis())
   {
-    millisLastButtonReaction = millis();
-    Serial.println("The button is pressed");
-    Wire.begin(ESP32_I2C_SDA, ESP32_I2C_SCL);
+    sleepOLED();
+    millisStartDisplay = 0;
+  }
 
-    curBand = (curBand + 1) % band_count;
-    switch (curBand)
+  //if (button.isPressed() && (millisLastButtonReaction + 1000 < millis()))
+  if (button_press_local)
+  {
+    button_press = false;
+    if (millisLastButtonReaction + 1000 < millis())
     {
-    case am:
-      si4735.setVolume(63);
-      si4735.setAM(570, 1710, 810, 10);
-      break;
-    case fm:
-      si4735.setVolume(63);
-      si4735.setFM(8600, 10800, 9490, 10);
-      si4735.setFmStereoOn();
-      break;
-    case lw:
-      si4735.setVolume(63);
-      si4735.setAM(9400, 9990, 9600, 5);
-      break;
-    case line:
-      si4735.setVolume(0);
-      break;
+      millisLastButtonReaction = millis();
+      Serial.println("The button is pressed");
+      Wire.begin(ESP32_I2C_SDA, ESP32_I2C_SCL);
+
+      curBand = (curBand + 1) % band_count;
+      switch (curBand)
+      {
+      case am:
+        si4735.setVolume(63);
+        si4735.setAM(570, 1710, 810, 10);
+        break;
+      case fm:
+        si4735.setVolume(63);
+        si4735.setFM(8600, 10800, 9490, 10);
+        si4735.setFmStereoOn();
+        break;
+      case lw:
+        si4735.setVolume(63);
+        si4735.setAM(9400, 9990, 9600, 5);
+        break;
+      case line:
+        si4735.setVolume(0);
+        break;
+      }
     }
 
     if (curBand == line)
