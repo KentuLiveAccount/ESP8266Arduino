@@ -80,6 +80,16 @@ uint8_t curBand = fm;
 
 SI4735 si4735;
 
+volatile int deltaCount = 0;
+const unsigned int c_FreqUpdateInterval = 250; // duration of time rotary encorder motion accumulates
+volatile unsigned int millisFrequencyUpdateStart = 0; // used to coalesce the rotary encoder changes
+volatile unsigned int millisStartDisplay = 0;
+unsigned int millisCalled = 0;
+unsigned int millisCalledSW = 0;
+unsigned int millisLastButtonReaction = 0; // used to avoid reacting to one button presses mupltiple times
+
+volatile bool button_press = 0;
+
 void showHelp()
 {
   Serial.println("Type F to FM; A to MW; L to LW; and 1 to SW");
@@ -125,6 +135,8 @@ void showStatus()
 
 void outputFrequencyToOLED()
 {
+  millisStartDisplay = millis();
+
   U8G2_SH1106_72X40_WISE_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE, 6 /*SCL*/, 5/*SDA*/);
   u8g2.begin();
   u8g2.sleepOff();
@@ -204,15 +216,6 @@ void setupSI4732()
   Wire.end();
 }
 
-volatile int deltaCount = 0;
-const unsigned int c_FreqUpdateInterval = 250; // duration of time rotary encorder motion accumulates
-volatile unsigned int millisFrequencyUpdateStart; // used to coalesce the rotary encoder changes
-volatile unsigned int millisStartDisplay = 0;
-unsigned int millisCalled = 0;
-unsigned int millisCalledSW = 0;
-unsigned int millisLastButtonReaction = 0; // used to avoid reacting to one button presses mupltiple times
-
-volatile int button_press = 0;
 
 void IRAM_ATTR isr_CLK_Rise()
 {
@@ -221,10 +224,8 @@ void IRAM_ATTR isr_CLK_Rise()
   if (millisFrequencyUpdateStart == 0)
     millisFrequencyUpdateStart = millisNow;
 
-  millisStartDisplay = millisNow;
-
   // debounce
-  if (millisCalled + 5 > millisNow)
+  if (millisCalled > 0 && millisCalled + 5 > millisNow)
     return;
 
   millisCalled = millisNow;
@@ -249,24 +250,23 @@ void IRAM_ATTR isr_SW_Fall()
 {
   unsigned int millisNow = millis();
 
-  millisStartDisplay = millisNow;
-
   // debounce
-  if (millisCalledSW + 5 > millisNow)
+  if (millisCalledSW > 0 && millisCalledSW + 5 > millisNow)
     return;
 
-  button_press++;
+  millisCalledSW = millisNow;
+  button_press = true;
 }
 
 void setupRotaryEncoder()
 {
   // configure encoder pins as inputs
-  pinMode(CLK_PIN, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(CLK_PIN), isr_CLK_Rise, RISING);
   pinMode(DT_PIN, INPUT_PULLUP);
   pinMode(SW_PIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(SW_PIN), isr_SW_Fall, FALLING);
-  button.setDebounceTime(50);  // set debounce time to 50 milliseconds
+  pinMode(CLK_PIN, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(CLK_PIN), isr_CLK_Rise, RISING);
+  //button.setDebounceTime(50);  // set debounce time to 50 milliseconds
 }
 
 void setup()
@@ -282,6 +282,7 @@ void setup()
   setupSI4732();
 
   outputFrequencyToOLED();
+  millisCalledSW = millisCalled = millis() + 2000; //avoid respoinding to ISR for a bit
 }
 
 void handleSerialInput()
@@ -359,7 +360,7 @@ void handleSerialInput()
 // Main
 void loop()
 {
-  button.loop();  // MUST call the loop() function first
+  //button.loop();  // MUST call the loop() function first
 
   noInterrupts ();
   int deltaCountLocal = deltaCount;
@@ -368,19 +369,14 @@ void loop()
   unsigned int millisStartDisplayLocal = millisStartDisplay;
   interrupts();
 
-  if (millisStartDisplayLocal > 0 && millisStartDisplayLocal + 10000 < millis())
-  {
-    sleepOLED();
-    millisStartDisplay = 0;
-  }
-
   //if (button.isPressed() && (millisLastButtonReaction + 1000 < millis()))
   if (button_press_local)
   {
     button_press = false;
-    if (millisLastButtonReaction + 1000 < millis())
+    if (millisLastButtonReaction == 0 || millisLastButtonReaction + 1000 < millis())
     {
       millisLastButtonReaction = millis();
+      millisCalledSW = 0;
       Serial.println("The button is pressed");
       Wire.begin(ESP32_I2C_SDA, ESP32_I2C_SCL);
 
@@ -404,15 +400,15 @@ void loop()
         si4735.setVolume(0);
         break;
       }
+
+      if (curBand == line)
+        currentFrequency = 0;
+      else
+        currentFrequency = si4735.getCurrentFrequency();
+
+      showStatus();
+      Wire.end();
     }
-
-    if (curBand == line)
-      currentFrequency = 0;
-    else
-      currentFrequency = si4735.getCurrentFrequency();
-
-    showStatus();
-    Wire.end();
   }
   else if (millisFrequencyUpdateStartLocal > 0)
   {
@@ -449,11 +445,13 @@ void loop()
     previousFrequency = currentFrequency;
     outputFrequencyToOLED();
   }
-  else
+  else if (millisStartDisplayLocal > 0 && millisStartDisplayLocal + 10000 < millis())
   {
-    //sleepOLED();
+    sleepOLED();
+    millisStartDisplay = 0;
   }
 
+  //Serial.println(".");
 
-  delay(100);
+  delay(200);
 }
