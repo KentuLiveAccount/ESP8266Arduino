@@ -261,10 +261,10 @@ void IRAM_ATTR isr_SW_Fall()
 void setupRotaryEncoder()
 {
   // configure encoder pins as inputs
-  pinMode(DT_PIN, INPUT_PULLUP);
-  pinMode(SW_PIN, INPUT_PULLUP);
+  pinMode(DT_PIN, INPUT);
+  pinMode(SW_PIN, INPUT);
   attachInterrupt(digitalPinToInterrupt(SW_PIN), isr_SW_Fall, FALLING);
-  pinMode(CLK_PIN, INPUT_PULLUP);
+  pinMode(CLK_PIN, INPUT);
   attachInterrupt(digitalPinToInterrupt(CLK_PIN), isr_CLK_Rise, RISING);
   //button.setDebounceTime(50);  // set debounce time to 50 milliseconds
 }
