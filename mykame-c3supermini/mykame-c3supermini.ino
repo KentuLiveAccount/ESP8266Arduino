@@ -1,8 +1,8 @@
 /*
   My Kame
   
-  ESP32C3 Super Mini with expansion board
-  BluePad Lolin C3 Mini
+  ESP32S3 Super Mini with expansion board
+  BluePad ESP32S3 Dev Board
   SG90 servos
   Staida game controller in BLE mode
 
@@ -185,14 +185,14 @@ void processControllers() {
     }
 }
 
-const int elbowRF = 21;
-const int elbowRB = 20;
-const int elbowLF = 0;
-const int elbowLB = 1;
-const int shoulderRF = 10;
-const int shoulderRB = 9;
-const int shoulderLF = 2;
-const int shoulderLB = 3;
+const int elbowRF = 7;
+const int elbowRB = 6;
+const int elbowLF = 8;
+const int elbowLB = 9;
+const int shoulderRF = 5;
+const int shoulderRB = 4;
+const int shoulderLF = 10;
+const int shoulderLB = 11;
 
 
 
