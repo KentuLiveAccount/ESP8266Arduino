@@ -34,7 +34,7 @@
 
 #define WIRE_INTERFACES_COUNT 2
 
-#include <SI4735.h>
+#include <SI4735.h> //"C:\Users\kentu\Documents\Arduino\libraries\PU2CLR_SI4735\src\SI4735.h"
 //#include <BLEDevice.h>
 #include <ezButton.h>  
 #include <WiFi.h>
@@ -204,10 +204,13 @@ void setupSI4732()
   int si4735Addr = si4735.getDeviceI2CAddress(RESET_PIN);
   si4735.setup(RESET_PIN, FM_FUNCTION);
   delay(300);
+  //si4735.disableFmDebug();
 
   // Starts default radio function and band (FM; from 84 to 108 MHz; 103.9 MHz; step 100kHz)
   si4735.setFM(8400 /* freqMin */, 10800 /* freqMax */, 9490 /*initialFreq*/, 10 /* freqStep */);
-  si4735.setFmStereoOn();
+  si4735.setFmStereoOff();
+  si4735.setFmBlendStereoThreshold(127); //forced mono
+  si4735.setFmBlendMonoThreshold(127);  //forced mono
   currentFrequency = previousFrequency = si4735.getFrequency();
   si4735.setVolume(63);
 
@@ -308,7 +311,7 @@ void handleSerialInput()
   case 'F':
     si4735.setVolume(63);
     si4735.setFM(8600, 10800, 9490, 10);
-    si4735.setFmStereoOn();
+    si4735.setFmStereoOff();
 
     break;
   case '1':
@@ -390,7 +393,7 @@ void loop()
       case fm:
         si4735.setVolume(63);
         si4735.setFM(8600, 10800, 9490, 10);
-        si4735.setFmStereoOn();
+        si4735.setFmStereoOff();
         break;
       case lw:
         si4735.setVolume(63);
