@@ -108,7 +108,7 @@ void loop()
     float favg1 = Thermistor::farenheightFromCelsius(Thermistor::CelciusFromOhm(mcp.ohmFromADC(floor(avg1.AverageInner() + 0.5), V_0, ResistorBank1), rgThermistor[amb]));
     float f1 =    Thermistor::farenheightFromCelsius(Thermistor::CelciusFromOhm(mcp.ohmFromADC(      avg1.Average(),             V_0, ResistorBank1), rgThermistor[amb]));
 
-    Serial.printf("%f, %f, %f, %f, 65.0, 68.0, 72.0 75.0, 90.0\n", fRaw0, fRaw1, f0, f1);
+    Serial.printf("%f, %f, %f, %f, 65.0, 68.0, 75.0, 90.0\n", fRaw0, fRaw1, f0, f1);
   }
 
   delay(5);
