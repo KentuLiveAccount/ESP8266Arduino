@@ -29,9 +29,17 @@ D6/GPIO12/MISO	MCP3202       6/DOUT
 // other constants
 double V_0 = 3.295; // 3.3v is the standard supply
 
-//double ResistorBank0 = 96100.0; //supposed to be 100k.
-double ResistorBank0 = 100000.0; //supposed to be 100k.
-double ResistorBank1 = 10010.0; //supposed to be 100k.
+double ResistorBank0 = 100000.0; //supposed to be 100k - not based on real measurement
+double ResistorBank1 =  10142.0; //supposed to be 10k.
+double ResistorBank2 =  80620.0; //supposed to be 100k.
+
+#if 0
+double ResistorBank0 = 86600.0; //supposed to be 100k - not based on real measurement
+double ResistorBank1 =  9960.0; //supposed to be 10k.
+double ResistorBank2 = 86700.0; //supposed to be 100k.
+#endif //0
+
+double rgRegistors[] = {ResistorBank0, ResistorBank1, ResistorBank2};
 
 MCP3202 mcp(MCP3202_CS);
 
@@ -40,11 +48,19 @@ MCP3202 mcp(MCP3202_CS);
 
 Thermistor::ThermistorValues rgThermistor[] =
 {
+#if 0
   {
     0, //channel zero is ambient
     10128.98342, //1.012898342 e-3 / 0.001012898342 * 10 ^ 7
     1693.975682, //1.693975682 e-4 / 0.0001693975682 * 10 ^ 7
     2.563810106  //2.563810106 e-7 / 0.0000002563810106 * 10 ^ 7
+  },
+#endif //0
+  {
+    0, //channel zero is ambient
+    8471.838980, //0.8471838980 e-3 / 0.0008471838980 * 10 ^ 7
+    1936.228867, //1.936228867 e-4 / 0.0001936228867 * 10 ^ 7
+    1.866445809  //1.866445809 e-7 / 0.0000001866445809 * 10 ^ 7
   },
   {
     1, //channel one is meat
@@ -53,6 +69,13 @@ Thermistor::ThermistorValues rgThermistor[] =
     2.539205261 //2.539205261 e-7 / 0.0000002539205261 * 10 ^ 7
   }
 };
+
+void SelectResistorBank(int i)
+{
+  digitalWrite(ResMuxSelect0, (i % 2) == 0 ? LOW : HIGH);
+  digitalWrite(ResMuxSelect1, ((i / 2) % 2) == 0 ? LOW : HIGH);
+}
+
 
 void setup() {
   // put your setup code here, to run once:
@@ -75,40 +98,45 @@ void setup() {
   //digitalWrite(ResMuxSelect0, HIGH);
   //digitalWrite(ResMuxSelect1, HIGH);
 
+  //SelectResistorBank(2);
 }
 
 NestedRunningAverage<200, 50> avg0;
 NestedRunningAverage<200, 50> avg1;
 
-void SelectResistorBank(int i)
-{
-  digitalWrite(ResMuxSelect0, (i % 2) == 0 ? LOW : HIGH);
-  digitalWrite(ResMuxSelect1, ((i / 2) % 2) == 0 ? LOW : HIGH);
-}
 
+void loop1()
+{
+
+}
 void loop() 
 {
-  SelectResistorBank(0);
+  int iRegistorA = 1; //10k
+  int iRegistorB = 2; //100k
+
+  SelectResistorBank(iRegistorA);
 
   delay(5);
   avg0.Add(mcp.Read(MCP_TempIn));
 
-  SelectResistorBank(1);
+  SelectResistorBank(iRegistorB);
 
   delay(5);
   avg1.Add(mcp.Read(MCP_TempIn));
   
   if (avg1.HasAverage())
   {
-    float fRaw0 = Thermistor::farenheightFromCelsius(Thermistor::CelciusFromOhm(mcp.ohmFromADC(      avg0.CurValueInner(),       V_0, ResistorBank0), rgThermistor[amb]));
-    float favg0 = Thermistor::farenheightFromCelsius(Thermistor::CelciusFromOhm(mcp.ohmFromADC(floor(avg0.AverageInner() + 0.5), V_0, ResistorBank0), rgThermistor[amb]));
-    float f0 =    Thermistor::farenheightFromCelsius(Thermistor::CelciusFromOhm(mcp.ohmFromADC(      avg0.Average(),             V_0, ResistorBank0), rgThermistor[amb]));
+    float fRaw0 = Thermistor::farenheightFromCelsius(Thermistor::CelciusFromOhm(mcp.ohmFromADC(      avg0.CurValueInner(),       V_0, rgRegistors[iRegistorA]), rgThermistor[amb]));
+    float favg0 = Thermistor::farenheightFromCelsius(Thermistor::CelciusFromOhm(mcp.ohmFromADC(floor(avg0.AverageInner() + 0.5), V_0, rgRegistors[iRegistorA]), rgThermistor[amb]));
+    float f0 =    Thermistor::farenheightFromCelsius(Thermistor::CelciusFromOhm(mcp.ohmFromADC(      avg0.Average(),             V_0, rgRegistors[iRegistorA]), rgThermistor[amb]));
 
-    float fRaw1 = Thermistor::farenheightFromCelsius(Thermistor::CelciusFromOhm(mcp.ohmFromADC(      avg1.CurValueInner(),       V_0, ResistorBank1), rgThermistor[amb]));
-    float favg1 = Thermistor::farenheightFromCelsius(Thermistor::CelciusFromOhm(mcp.ohmFromADC(floor(avg1.AverageInner() + 0.5), V_0, ResistorBank1), rgThermistor[amb]));
-    float f1 =    Thermistor::farenheightFromCelsius(Thermistor::CelciusFromOhm(mcp.ohmFromADC(      avg1.Average(),             V_0, ResistorBank1), rgThermistor[amb]));
+    float fRaw1 = Thermistor::farenheightFromCelsius(Thermistor::CelciusFromOhm(mcp.ohmFromADC(      avg1.CurValueInner(),       V_0, rgRegistors[iRegistorB]), rgThermistor[amb]));
+    float favg1 = Thermistor::farenheightFromCelsius(Thermistor::CelciusFromOhm(mcp.ohmFromADC(floor(avg1.AverageInner() + 0.5), V_0, rgRegistors[iRegistorB]), rgThermistor[amb]));
+    float f1 =    Thermistor::farenheightFromCelsius(Thermistor::CelciusFromOhm(mcp.ohmFromADC(      avg1.Average(),             V_0, rgRegistors[iRegistorB]), rgThermistor[amb]));
 
-    Serial.printf("%f, %f, %f, %f, 65.0, 68.0, 75.0, 90.0\n", fRaw0, fRaw1, f0, f1);
+    float t10k = Thermistor::farenheightFromCelsius(Thermistor::CelciusFromOhm(10000.0, rgThermistor[amb]));
+    float t100k = Thermistor::farenheightFromCelsius(Thermistor::CelciusFromOhm(100000.0, rgThermistor[amb]));
+    Serial.printf("%f, %f, %f, %f, %f, %f, %f, %f\n", fRaw0, fRaw1, favg0, favg1, f0, f1, t10k, t100k);
   }
 
   delay(5);
