@@ -29,11 +29,16 @@ D6/GPIO12/MISO	MCP3202       6/DOUT
 // other constants
 double V_0 = 3.295; // 3.3v is the standard supply
 
+double ResistorBank0 = 9951.5592; //supposed to be 100k - not based on real measurement
+double ResistorBank1 =  9951.5592; //supposed to be 10k.
+double ResistorBank2 =  9951.5592; //supposed to be 100k.
+
+#if 0
+
 double ResistorBank0 = 100000.0; //supposed to be 100k - not based on real measurement
 double ResistorBank1 =  10142.0; //supposed to be 10k.
 double ResistorBank2 =  80620.0; //supposed to be 100k.
 
-#if 0
 double ResistorBank0 = 86600.0; //supposed to be 100k - not based on real measurement
 double ResistorBank1 =  9960.0; //supposed to be 10k.
 double ResistorBank2 = 86700.0; //supposed to be 100k.
@@ -56,7 +61,7 @@ Thermistor::ThermistorValues rgThermistor[] =
     2.563810106  //2.563810106 e-7 / 0.0000002563810106 * 10 ^ 7
   },
 #endif //0
-  {
+  { // take 2
     0, //channel zero is ambient
     8471.838980, //0.8471838980 e-3 / 0.0008471838980 * 10 ^ 7
     1936.228867, //1.936228867 e-4 / 0.0001936228867 * 10 ^ 7
@@ -76,6 +81,10 @@ void SelectResistorBank(int i)
   digitalWrite(ResMuxSelect1, ((i / 2) % 2) == 0 ? LOW : HIGH);
 }
 
+const int iRegistor0 = 0; //100k
+const int iRegistorA = 1; //10k
+const int iRegistorB = 2; //100k
+const int iRegistor3 = 3; //N/C
 
 void setup() {
   // put your setup code here, to run once:
@@ -98,7 +107,8 @@ void setup() {
   //digitalWrite(ResMuxSelect0, HIGH);
   //digitalWrite(ResMuxSelect1, HIGH);
 
-  //SelectResistorBank(2);
+  SelectResistorBank(iRegistor3); // NC
+
 }
 
 NestedRunningAverage<200, 50> avg0;
@@ -109,6 +119,39 @@ void loop1()
 {
 
 }
+
+void loop2() 
+{
+
+  //SelectResistorBank(iRegistorA);
+
+  delay(5);
+  avg0.Add(mcp.Read(MCP_TempIn));
+
+  //SelectResistorBank(iRegistorB);
+
+  delay(5);
+  avg1.Add(mcp.Read(MCP_TempIn));
+  
+  if (avg1.HasAverage())
+  {
+    float fRaw0 = avg0.CurValueInner();
+    float favg0 = floor(avg0.AverageInner() + 0.5);
+    float f0 =    avg0.Average();
+
+    float fRaw1 = avg1.CurValueInner();
+    float favg1 = floor(avg1.AverageInner() + 0.5);
+    float f1 =    avg1.Average();
+
+    float t10k = 0.0;
+    float t100k = 4096.0;
+    Serial.printf("%f, %f, %f, %f, %f, %f, %f, %f\n", fRaw0, fRaw1, favg0, favg1, f0, f1, t10k, t100k);
+  }
+
+  delay(5);
+}
+
+
 void loop() 
 {
   int iRegistorA = 1; //10k
