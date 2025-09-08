@@ -2,9 +2,11 @@
 template <int c> class RunningAverage
 {
 public:
-double CurValue() { return rgv[(c + m_i - 1) % c];}
+int CurIndex() { return (c + m_i - 1) % c;}
+int Count() { return m_hasavg ? c : m_i;}
+double CurValue() { return rgv[CurIndex()];}
 bool HasAverage(){ return m_hasavg;}
-double Average() { return (double)m_sum / (double)c;}
+double Average() { return (double)m_sum / (double)Count();}
 void Add(int v)
 {
   if (!m_hasavg)
@@ -44,11 +46,7 @@ public:
   void Add(int v)
   {
     m_first.Add(v);
-    if (m_first.HasAverage())
-    {
-      //Serial.printf("%f\n", );
-      m_second.Add(floor(m_first.Average() + 0.5));
-    }
+    m_second.Add(floor(m_first.Average() + 0.5));
   }
 private:
   RunningAverage<cfirst> m_first;

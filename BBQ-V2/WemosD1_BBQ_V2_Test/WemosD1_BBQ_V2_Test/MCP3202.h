@@ -6,12 +6,14 @@ MCP3202_CS : data pin connected to MCP3202 1/CS pin
 class MCP3202
 {
 public:
-MCP3202(int CS):m_cs(CS){}
+MCP3202(int CS, float v0):m_cs(CS), m_v0(v0){}
 const int m_cs;
 const int m_adcResolution = 12;
+const float m_v0;
 
 void Initialize()
 {
+  pinMode(m_cs, OUTPUT);
   digitalWrite(m_cs, HIGH);
   SPI.begin();
   SPI.setClockDivider(SPI_CLOCK_DIV32);
@@ -36,16 +38,16 @@ int Read(int CHANNEL) {
   return ((int) msb) << 8 | lsb;
 }
 
-double ohmFromADC(double adcIn, double v0, double r2)
+double ohmFromADC(double adcIn, double r2)
 {
   double sensorMax = pow(2, m_adcResolution);
   // Convert the analog reading (which goes from 0 - 4096) to voltage reference (3.3V):
-  double voltage = adcIn * v0  / sensorMax;
+  double voltage = adcIn * m_v0  / sensorMax;
 
   double R_1 = 0;
 
   if (voltage > 0)
-    R_1 = r2 * (v0 - voltage)/voltage; // voltage to resistance
+    R_1 = r2 * (m_v0 - voltage)/voltage; // voltage to resistance
 
   return R_1;
 }
