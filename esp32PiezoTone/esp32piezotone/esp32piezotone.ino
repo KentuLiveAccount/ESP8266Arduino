@@ -4,30 +4,32 @@ void setup() {
   Serial.begin(9600);
   Serial.println("Setup");
   // put your setup code here, to run once:
-  ledcSetup(0 /*channel*/, 200 /*PWM frequency*/, 8 /*resolution*/);
-  ledcAttachPin(ledPin, 0 /*channel*/);
+  // ledcSetup(0 /*channel*/, 200 /*PWM frequency*/, 8 /*resolution*/);
+  // ledcAttachPin(ledPin, 0 /*channel*/);
+
+  ledcAttach(ledPin, 200 /* PWM frequency*/, 8 /* resolution*/);
   Serial.println("SetupEnd");
 }
 
 void lowtohi()
 {
-  ledcWriteTone(0, 100);
+  ledcWriteTone(ledPin, 100);
   delay(1000);
-  ledcWriteTone(0, 500);
+  ledcWriteTone(ledPin, 500);
   delay(1000);
-  ledcWriteTone(0, 1000);
+  ledcWriteTone(ledPin, 1000);
   delay(1000);
-  ledcWriteTone(0, 2000);
+  ledcWriteTone(ledPin, 2000);
   delay(1000);
-  ledcWriteTone(0, 3000);
+  ledcWriteTone(ledPin, 3000);
   delay(1000);
-  ledcWriteTone(0, 4000);
+  ledcWriteTone(ledPin, 4000);
   delay(1000);
-  ledcWriteTone(0, 5000);
+  ledcWriteTone(ledPin, 5000);
   delay(1000);
-  ledcWriteTone(0, 6000);
+  ledcWriteTone(ledPin, 6000);
   delay(1000);
-  ledcWriteTone(0, 7000);
+  ledcWriteTone(ledPin, 7000);
   
 }
 
@@ -38,7 +40,7 @@ void notes()
   {
     Serial.print("Write NoteC in Octave: ");
     Serial.println(String(i));
-    ledcWriteNote(0, NOTE_C, i);
+    ledcWriteNote(ledPin, NOTE_C, i);
     delay(1000);
   }
 }
@@ -49,32 +51,23 @@ void twinkle()
   int len[]={1000,1000,1000,1000,1000,1000,2000,1000,1000,1000,1000,1000,1000,2000};
   for (size_t i = 0; i < (sizeof(note)/sizeof(note_t)); i++)
   {
-    ledcWriteNote(0, note[i], 6);
+    ledcWriteNote(ledPin, note[i], 6);
     delay(len[i]);
-    ledcWriteTone(0, 0);
+    ledcWriteTone(ledPin, 0);
     delay(50);
   }
-  ledcWriteTone(0, 0);
+  ledcWriteTone(ledPin, 0);
 }
 
-void alternate()
+void alternate(int f1, int f2)
 {
-  ledcWriteTone(0, 3000);
-  delay(200);
-  ledcWriteTone(0, 4000);
-  delay(200);
-  ledcWriteTone(0, 3000);
-  delay(200);
-  ledcWriteTone(0, 4000);
-  delay(200);
-  ledcWriteTone(0, 3000);
-  delay(200);
-  ledcWriteTone(0, 4000);
-  delay(200);
-  ledcWriteTone(0, 3000);
-  delay(200);
-  ledcWriteTone(0, 4000);
-  delay(200);
+  for (int i = 0; i < 4; i++)
+  {
+    ledcWriteTone(ledPin, f1);
+    delay(200);
+    ledcWriteTone(ledPin, f2);
+    delay(200);
+  }
 }
 
 void loop() {
@@ -86,11 +79,18 @@ void loop() {
   //lowtohi();
   //delay(1000);
   //notes();
-  //delay(1000);
+  alternate(500, 1000);
+  delay(1000);
+  alternate(3000, 4000);
+  delay(1000);
+  alternate(500, 2000);
+  delay(1000);
+  alternate(1000, 3000);
+  delay(1000);
   twinkle();
   delay(1000);
   //alternate();
   Serial.println("WriteTone 0");
-  ledcWriteTone(0, 0);
+  ledcWriteTone(ledPin, 0);
   delay(50);
 }
