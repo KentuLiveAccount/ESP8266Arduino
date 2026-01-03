@@ -4,7 +4,7 @@
 
 Adafruit_NeoPixel pixels(NUMPIXELS, PIN, NEO_GRB);
 
-#define DELAYVAL 10
+#define DELAYVAL 100
 const unsigned int colorDepth = 4;
 const unsigned int maxNum = pow(2, colorDepth * 3);
 const unsigned short maxColorVal = pow(2, colorDepth) - 1;
@@ -13,6 +13,13 @@ unsigned int num = 0;
 
 #define AnalogV A0  //Joystick Analog V
 #define AnalogH A1  //Joystick Analog H
+#define PiezoOut A2
+
+// use 12 bit precision for LEDC timer
+#define LEDC_TIMER_12_BIT 8
+
+// use 5000 Hz as a LEDC base frequency
+#define LEDC_BASE_FREQ 2000
 
 unsigned short RFromNum(unsigned int num)
 {
@@ -34,6 +41,10 @@ void setup() {
   Serial.println("initialize NeoPixels library");
 
   pixels.begin();
+  ledcSetup(0 /*channel*/, 200 /*PWM frequency*/, 8 /*resolution*/);
+  ledcAttachPin(ledPin, 0 /*channel*/);
+
+  ledcAttach(PiezoOut, 200 /* LEDC_BASE_FREQ */, 8 /* LEDC_TIMER_12_BIT */);
 }
 
 void setColor(unsigned short r, unsigned short g, unsigned short b)
@@ -79,10 +90,12 @@ void loop() {
   int v = analogRead(AnalogV);
   int h = analogRead(AnalogH);
 
-
   showAnalogIn(v, h);
 
   setColor(vRangeToCol(v), 0, hRangeToCol(h));
+
+  ledcWrite(PiezoOut, v);
+
 
   //setColor(RFromNum(num), GFromNum(num), BFromNum(num));
   delay(DELAYVAL);

@@ -309,6 +309,7 @@ double minmax(double val, double mn, double mx)
 
 NestedRunningAverage<50, 20> avg[2];
 int millisTimeLast = 0;
+int millisTimeLastServo = 0;
 
 void loop(void)
 {
@@ -334,7 +335,17 @@ void loop(void)
 
   myPID.Compute();
 
+  int angleI = floor(minmax(angle, 0.0, 255.0));
+  
+  angleI = angleI * 105 / 255;
+
   int millisNow = millis();
+  if (millisTimeLastServo == 0 || abs(millisNow - millisTimeLastServo) > (1000))
+  {
+    millisTimeLastServo = millisNow;
+    myservo.write(angleI);
+  }
+
   if (millisTimeLast != 0 && abs(millisNow - millisTimeLast) < (1000 * 10))
     return;
 
@@ -342,17 +353,10 @@ void loop(void)
   //DEBUG(Serial.println("\nchan1: " + String(channel1)));
 
   millisTimeLast = millisNow;
-
-
-  int angleI = floor(minmax(angle, 0.0, 255.0));
-  
-  angleI = angleI * 105 / 255;
-
   AddTemp(currentTemp, currentInternalTemp, targetTemp, angleI, pidP,  pidI, pidD);
 
   //DEBUG(Serial.println("\nservo angle: " + String(angle)));
   //DEBUG(Serial.println("\nservo angleI: " + String(angleI)));
   DEBUG(Serial.printf("%f, %f, %d\n", currentTemp, currentInternalTemp, angleI));
 
-  myservo.write(angleI);
 }
