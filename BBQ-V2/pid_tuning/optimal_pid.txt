@@ -1,0 +1,7 @@
+Optimal PID Parameters
+=====================
+Kp = 6.41
+Ki = 31.74
+Kd = 0.39
+
+Cost: 46450.41
