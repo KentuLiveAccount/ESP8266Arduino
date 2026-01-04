@@ -223,7 +223,14 @@ Hotter → faster combustion → hotter. Amplifies overshoots.
 ### Future Explorations
 1. **Multiple cooking sessions** - validate model across conditions
 2. **Disturbance modeling** - lid opening, meat loading, wind
-3. **Alternative control** - MPC, adaptive, or bang-bang with learning
+3. **Oval vent geometry** - precise airflow vs servo angle mapping
+   - Two metal plates with identical oval holes
+   - Airflow = function of oval overlap area
+   - Each degree of servo movement produces different airflow delta
+   - Current model uses simple threshold (restricted below 15%)
+   - True physics: non-linear geometric overlap function
+   - Could measure actual airflow vs angle, fit polynomial/lookup table
+4. **Alternative control** - MPC, adaptive, or bang-bang with learning
 
 ### Code Organization
 1. Export `CombustionGrillSimulator` to separate `.py` module
