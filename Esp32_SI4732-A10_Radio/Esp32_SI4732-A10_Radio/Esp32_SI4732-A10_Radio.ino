@@ -32,14 +32,23 @@
 */
 
 #include <SI4735.h>
+#include "ESP_I2S.h"
+#include "BluetoothA2DPSink.h"
 
-#define RESET_PIN 26              // GPIO12
+const uint8_t I2S_SCK = 17;       /* Audio data bit clock */
+const uint8_t I2S_WS = 22;       /* Audio data left and right clock */
+const uint8_t I2S_SDOUT = 21;    /* ESP32 audio data output (to speakers) */
+const uint8_t TS5VSWITCH = 16;   /* audio out switch low = rado, high bluetooth */
+I2SClass i2s;
+
+BluetoothA2DPSink a2dp_sink(i2s);
+
+#define RESET_PIN 26
 
 // I2C bus pin on ESP32
-#define ESP32_I2C_SDA 19     // GPIO21
-#define ESP32_I2C_SCL 18     // GPIO22 
+#define ESP32_I2C_SDA 19
+#define ESP32_I2C_SCL 18
 
-#define CAPACITANCE 30
 
 
 #define AM_FUNCTION 1
@@ -92,28 +101,27 @@ void showStatus()
   Serial.println("dBuV]");
 }
 
-
-
-int touchUp, touchDown;
-
-
-int readX(int pin) {
-  int val;
-  val = 0;
-  for (int i = 0; i < 50; i++ )
-    val += touchRead(pin);
-  return (val / 50);  
-}
-
-
+bool FMBT = true;
 
 void setup()
 {
   Serial.begin(115200);
-  while(!Serial);
+  delay(500);
+  //while(!Serial);
 
+  pinMode(RESET_PIN, OUTPUT);
+  pinMode(TS5VSWITCH, OUTPUT);
   digitalWrite(RESET_PIN, HIGH);
+  digitalWrite(TS5VSWITCH, FMBT ? LOW : HIGH);
   
+  i2s.setPins(I2S_SCK, I2S_WS, I2S_SDOUT);
+  if (!i2s.begin(I2S_MODE_STD, 44100, I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO, I2S_STD_SLOT_BOTH)) {
+    Serial.println("Failed to initialize I2S!");
+    while (1); // do nothing
+  }
+
+  a2dp_sink.start("MyMusic");
+
   Serial.println("AM and FM station tuning test.");
 
   showHelp();
@@ -199,6 +207,11 @@ void loop()
       break;
     case '?':
       showHelp();
+      break;
+    case 't':
+    case 'T':
+      FMBT = !FMBT;
+      digitalWrite(TS5VSWITCH, FMBT ? LOW : HIGH);
       break;
     default:
       break;

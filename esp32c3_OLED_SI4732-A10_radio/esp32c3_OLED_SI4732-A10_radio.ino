@@ -278,6 +278,8 @@ void setup()
   while(!Serial);
     delay(1000);
   
+  delay(3000);
+  Serial.print("hello\n");
   WiFi.mode( WIFI_MODE_NULL );
 
   setupRotaryEncoder();

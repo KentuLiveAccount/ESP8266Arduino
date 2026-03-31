@@ -27,6 +27,7 @@
 #include "ThermistorMath.h"
 #include "RunningAverage.h"
 #include "DataLogger.h"
+#include "GrillSimulator.h"
 #include <ESP8266WebServer.h>
 #include <Servo.h>
 #include <PID_v1.h> // from https://github.com/br3ttb/Arduino-PID-Library/
@@ -57,6 +58,8 @@ double angle = 0;
 double pidP = 13;
 double pidI = 20;
 double pidD = 15;
+
+GrillSimulator grillSim;
 
 PID myPID(&currentTemp, &angle, &targetTemp, pidP, pidI, pidD, DIRECT);
 
@@ -192,6 +195,28 @@ void handleSetPidD() {
   digitalWrite(led, LOW);
 }
 
+void handleSetSimMode() {
+  digitalWrite(led, HIGH);
+  Serial.println("gotPost - SetSimMode");
+
+  Serial.println("arg: " + server.arg("plain"));
+  server.sendHeader(accessControlAllowOrigin,"*");
+  
+  int mode = server.arg("plain").toInt();
+  grillSim.setEnabled(mode != 0);
+  
+  if (grillSim.isEnabled()) {
+    server.send(200, "text/plain", "Simulation mode ENABLED");
+    Serial.println("Simulation mode ENABLED");
+  } else {
+    server.send(200, "text/plain", "Simulation mode DISABLED");
+    Serial.println("Simulation mode DISABLED");
+  }
+
+  delay(200);
+  digitalWrite(led, LOW);
+}
+
 void handleNotFound(){
   digitalWrite(led, HIGH);
   String message = "File Not Found\n\n";
@@ -265,6 +290,8 @@ void setup(void){
   server.on("/setpidp", HTTP_POST, handleSetPidP);
   server.on("/setpidi", HTTP_POST, handleSetPidI);
   server.on("/setpidd", HTTP_POST, handleSetPidD);
+  
+  server.on("/setsimmode", HTTP_POST, handleSetSimMode);
 
   server.onNotFound(handleNotFound);
 
@@ -332,6 +359,14 @@ void loop(void)
 
   currentTemp  = Thermistor::farenheightFromCelsius(tempCAmb);
   double currentInternalTemp  = Thermistor::farenheightFromCelsius(tempCMeat);
+  
+  // Use simulation if enabled
+  if (grillSim.isEnabled()) {
+    int angleI = floor(minmax(angle, 0.0, 255.0)) * 105 / 255;
+    grillSim.update(angleI);
+    currentTemp = grillSim.getGrillTemp();
+    currentInternalTemp = grillSim.getMeatTemp();
+  }
 
   myPID.Compute();
 
@@ -357,6 +392,10 @@ void loop(void)
 
   //DEBUG(Serial.println("\nservo angle: " + String(angle)));
   //DEBUG(Serial.println("\nservo angleI: " + String(angleI)));
-  DEBUG(Serial.printf("%f, %f, %d\n", currentTemp, currentInternalTemp, angleI));
+  if (grillSim.isEnabled()) {
+    DEBUG(Serial.printf("[SIM] %f, %f, %d\n", currentTemp, currentInternalTemp, angleI));
+  } else {
+    DEBUG(Serial.printf("%f, %f, %d\n", currentTemp, currentInternalTemp, angleI));
+  }
 
 }

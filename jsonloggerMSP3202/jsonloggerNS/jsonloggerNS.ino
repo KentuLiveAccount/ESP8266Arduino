@@ -1,5 +1,12 @@
 
 /*
+
+  create a skeleton  code that has large upload and see if problem repeats.
+
+  max content 901 characters, anything loger winds up with Recv isse even with static text.
+  even with 901 characters, unknown lenght also results in recv
+    // curl: (56) Recv failure: Connection was reset
+
   HelloServerBearSSL - Simple HTTPS server example
   This example demonstrates a basic ESP8266WebServerSecure HTTPS server
   that can serve "/" and "/inline" and generate detailed 404 (not found)
@@ -9,12 +16,14 @@
   r, III, from the HelloServer.ino example.
   This example is released into the public domain.
 
-  curl -X POST -H "Content-Type: text/plain" "http://192.168.1.12/settemp" -d "62"
-  curl -X POST -H "Content-Type: text/plain" "http://192.168.1.12/setpidp" -d "0"
-  curl -X POST -H "Content-Type: text/plain" "http://192.168.1.12/setpidi" -d "0"
-  curl -X POST -H "Content-Type: text/plain" "http://192.168.1.12/setpidd" -d "0"
+  curl -X POST -H "Content-Type: text/plain" "http://192.168.1.4/settemp" -d "62"
+  curl -X POST -H "Content-Type: text/plain" "http://192.168.1.4/setpidp" -d "0"
+  curl -X POST -H "Content-Type: text/plain" "http://192.168.1.4/setpidi" -d "0"
+  curl -X POST -H "Content-Type: text/plain" "http://192.168.1.4/setpidd" -d "0"
 */
-#include <WiFiManager.h>
+//#include <WiFiManager.h>
+
+#define LWIP_TCP_CLOSE_TIMEOUT_MS_DEFAULT 400000
 #include <ESP8266WebServer.h>
 #include <Servo.h>
 #include <PID_v1.h> // from https://github.com/br3ttb/Arduino-PID-Library/
@@ -64,22 +73,26 @@ double pidIs[cDataMax];
 double pidDs[cDataMax];
 int cData = 0;
 int millisTimeLast = 0;
-double targetTemp = 100;
+double targetTemp = 205;
 double currentTemp = 0;
 double currentInternalTemp = 0;
 double angle = 0;
-double pidP = 25;
-double pidI = 30;
-double pidD = 10;
+double pidP = 13;
+double pidI = 20;
+double pidD = 15;
 
 PID myPID(&currentTemp, &angle, &targetTemp, pidP, pidI, pidD, DIRECT);
 
 const int led = 2;
 
+String s_string;
+
 //required for some reason...
 void onConnectionEstablished() {
   Serial.print("Wifi, mqtt connected!");
 }
+
+void ReadTempsPID();
 
 void AddTemp(int temp, int tempInt, int angleI)
 {
@@ -91,6 +104,8 @@ void AddTemp(int temp, int tempInt, int angleI)
   pidPs[i] = pidP;
   pidIs[i] = pidI;
   pidDs[i] = pidD;
+
+  //ReadTempsPID();
 }
 
 int currentIndex()
@@ -143,6 +158,7 @@ String ReadCurPID()
 
   return str;
 }
+
 String ReadTemps()
 {
   int count = cData < cDataMax ? cData : cDataMax;
@@ -167,38 +183,52 @@ String ReadTemps()
   return str;
 }
 
-String ReadTempsPID()
+/*
+json
+ 13  {"message": [
+60  {"currenttemp": 000, "internatemp": 000, "targettemp": 000},
+  2  ]}
+
+jsonpid
+ 13  {"message": [
+119  {"currenttemp": 000, "internatemp": 000, "targettemp": 000, "angle": 000, "pidP": 00.00, "pidI": 00.00, "pidD": 00.00},
+  2  ]}
+
+  11900 + 15 = 11,915 bytes
+*/
+void ReadTempsPID()
 {
   int count = cData < cDataMax ? cData : cDataMax;
   int i = cData < cDataMax ? 0 : cData;
 
-  String str = "";
+  s_string = "{\"message\": [";
   while (count)
   {
     int t = i++ % cDataMax;
-    str += "{ \"currenttemp\": ";
-    str += String(temps[t]);
-    str += ", \"internatemp\": ";
-    str += String(intTemps[t]);
-    str += ", \"targettemp\": ";
-    str += String(target[t]);
-    str += ", \"angle\": ";
-    str += String(angles[t]);
-    str += ", \"pidP\": ";
-    str += String(pidPs[t]);
-    str += ", \"pidI\": ";
-    str += String(pidIs[t]);
-    str += ", \"pidD\": ";
-    str += String(pidDs[t]);
-    str += "}";
+    s_string += "{ \"currenttemp\": ";
+    s_string += String(temps[t]);
+    s_string += ", \"internatemp\": ";
+    s_string += String(intTemps[t]);
+    s_string += ", \"targettemp\": ";
+    s_string += String(target[t]);
+    s_string += ", \"angle\": ";
+    s_string += String(angles[t]);
+    s_string += ", \"pidP\": ";
+    s_string += String(pidPs[t]);
+    s_string += ", \"pidI\": ";
+    s_string += String(pidIs[t]);
+    s_string += ", \"pidD\": ";
+    s_string += String(pidDs[t]);
+    s_string += "}";
 
     if (count > 1)
-      str += ", ";
+      s_string += ", ";
     count--;
   }
 
-  return str;
+  s_string += "]}\n";
 }
+
 void handleRoot() {
 
   digitalWrite(led, HIGH);
@@ -207,37 +237,100 @@ void handleRoot() {
   digitalWrite(led, LOW);
 }
 
-void handleJson() {
+void  SendTemps()
+{
+  int count = cData < cDataMax ? cData : cDataMax;
+  int i = cData < cDataMax ? 0 : cData;
+
+  while (count)
+  {
+    server.sendContent("{ \"currenttemp\": ");
+    server.sendContent(String(temps[i % cDataMax]));
+    server.sendContent(", \"internatemp\": ");
+    server.sendContent(String(intTemps[i % cDataMax]));
+    server.sendContent(", \"targettemp\": ");
+    server.sendContent(String(target[i++ % cDataMax]));
+
+    if (count > 1)
+      server.sendContent("}, ");
+    else
+      server.sendContent("}");
+    count--;
+  }
+}
+
+const char accessControlAllowOrigin[] = "Access-Control-Allow-Origin";
+const char applicationJsonUtf8[] = "application/json;charset=utf-8";
+void handleJson() 
+{
+  Serial.print("\nJson - Start: ");
 
   digitalWrite(led, HIGH);
-  server.sendHeader("Access-Control-Allow-Origin","*");
-  server.send(200, "application/json;charset=utf-8", "{\"message\": [" + ReadTemps() + "]}");
+
+  server.sendHeader(accessControlAllowOrigin,"*");
+  server.sendHeader("Expires", "-1");
+  //server.setContentLength(961);
+  
+  int count = 100; //15 (max 100)
+
+  server.chunkedResponseModeStart(200, applicationJsonUtf8);
+  server.sendContent("{\"message\": [");
+  for (int i = 0; i < (count);i++)
+  {
+    if (i < (count - 1))
+      server.sendContent("{ \"currenttemp\": 32, \"internatemp\": 32, \"targettemp\": 205},");
+    else
+      server.sendContent("{ \"currenttemp\": 32, \"internatemp\": 32, \"targettemp\": 205}]}");
+  }
+
+  server.chunkedResponseFinalize();
+
+  //SendTemps();
+  Serial.println("Json - Stopping");
+  //server.client().stop(40000);
   delay(200);
   digitalWrite(led, LOW);
+  Serial.println("Json - End");
 }
 
 void handleJsonPID()
 {
+  Serial.print("\nJsonPID - Start: ");
 
   digitalWrite(led, HIGH);
-  server.sendHeader("Access-Control-Allow-Origin","*");
-  server.send(200, "application/json;charset=utf-8", "{\"message\": [" + ReadTempsPID() + "]}");
+
+  server.sendHeader(accessControlAllowOrigin,"*");
+  server.sendHeader("Expires", "-1");
+  //server.setContentLength(17);
+  server.chunkedResponseModeStart(200, applicationJsonUtf8);
+
+  server.sendContent("{\"message\": [");
+  server.sendContent("{ \"currenttemp\": 32, \"internatemp\": 32, \"targettemp\": 205},");
+  server.sendContent("{ \"currenttemp\": 32, \"internatemp\": 32, \"targettemp\": 205}]}");
+
+  server.chunkedResponseFinalize();
+
+  //Serial.println("JsonPid - Stopping");
+  //server.client().stop(40000);
+
   delay(200);
   digitalWrite(led, LOW);
+
+  Serial.println("JsonPID - End");
 }
 
 void handleCur() {
   digitalWrite(led, HIGH);
-  server.sendHeader("Access-Control-Allow-Origin","*");
-  server.send(200, "application/json;charset=utf-8", "{\"message\": [" + ReadCur() + "]}");
+  server.sendHeader(accessControlAllowOrigin,"*");
+  server.send(200, applicationJsonUtf8, "{\"message\": [" + ReadCur() + "]}");
   delay(200);
   digitalWrite(led, LOW);  
 }
 
 void handleCurPID() {
   digitalWrite(led, HIGH);
-  server.sendHeader("Access-Control-Allow-Origin","*");
-  server.send(200, "application/json;charset=utf-8", "{\"message\": [" + ReadCurPID() + "]}");
+  server.sendHeader(accessControlAllowOrigin,"*");
+  server.send(200, applicationJsonUtf8, "{\"message\": [" + ReadCurPID() + "]}");
   delay(200);
   digitalWrite(led, LOW);  
 }
@@ -247,7 +340,7 @@ void handleSetTemp() {
   Serial.println("gotPost - SetTemp");
 
   Serial.println("arg: " + server.arg("plain"));
-  server.sendHeader("Access-Control-Allow-Origin","*");
+  server.sendHeader(accessControlAllowOrigin,"*");
   server.send(200, "text/plain", "temp set");
   targetTemp = server.arg("plain").toInt();
   UpdateCurrentTarget(targetTemp);
@@ -261,7 +354,7 @@ void handleSetPidP() {
   Serial.println("gotPost - SetPidP");
 
   Serial.println("arg: " + server.arg("plain"));
-  server.sendHeader("Access-Control-Allow-Origin","*");
+  server.sendHeader(accessControlAllowOrigin,"*");
   server.send(200, "text/plain", "PidP updated");
   pidP = server.arg("plain").toDouble();
   myPID.SetTunings(pidP, pidI, pidD);
@@ -275,7 +368,7 @@ void handleSetPidI() {
   Serial.println("gotPost - SetPidI");
 
   Serial.println("arg: " + server.arg("plain"));
-  server.sendHeader("Access-Control-Allow-Origin","*");
+  server.sendHeader(accessControlAllowOrigin,"*");
   server.send(200, "text/plain", "PidI updated");
   pidI = server.arg("plain").toDouble();
   myPID.SetTunings(pidP, pidI, pidD);
@@ -289,7 +382,7 @@ void handleSetPidD() {
   Serial.println("gotPost - SetPidD");
 
   Serial.println("arg: " + server.arg("plain"));
-  server.sendHeader("Access-Control-Allow-Origin","*");
+  server.sendHeader(accessControlAllowOrigin,"*");
   server.send(200, "text/plain", "PidD updated");
   pidD = server.arg("plain").toDouble();
   myPID.SetTunings(pidP, pidI, pidD);
@@ -317,6 +410,8 @@ void handleNotFound(){
 
 void setup(void){
 
+  s_string.reserve(20000);
+
   pinMode(CS_3202, OUTPUT);
   digitalWrite(CS_3202, HIGH);
   SPI.begin();
@@ -326,6 +421,8 @@ void setup(void){
   digitalWrite(led, HIGH);
   pinMode(ServoPin, OUTPUT);
   Serial.begin(115200);
+
+  Serial.print("setup started\n");
   
   myservo.attach(ServoPin);
   myservo.write(0);
@@ -336,10 +433,14 @@ void setup(void){
 
   myPID.SetMode(AUTOMATIC);
 
-   WiFi.mode(WIFI_STA); // explicitly set mode, esp defaults to STA+AP
+  WiFi.mode(WIFI_STA); // explicitly set mode, esp defaults to STA+AP
+  WiFi.config(IPAddress(10,0,0,10)  /*ip*/, IPAddress(10,0,0,1 /*gw*/), IPAddress(255,255,255,0 /*sn mask*/));
+  //WiFi.config(IPAddress(192,168,1,4)  /*ip*/, IPAddress(192,168,1,1 /*gw*/), IPAddress(255,255,255,0 /*sn mask*/));
+  WiFi.begin(WIFINAME, WIFIPW);
 
+  #if 0
   //WiFiManager, Local intialization. Once its business is done, there is no need to keep it around
-  WiFiManager wm;
+  //WiFiManager wm;
 
   // reset settings - wipe stored credentials for testing
   // these are stored by the esp library
@@ -350,20 +451,21 @@ void setup(void){
   // if empty will auto generate SSID, if password is blank it will be anonymous AP (wm.autoConnect())
   // then goes into a blocking loop awaiting configuration and will return success result
 
-  wm.setSTAStaticIPConfig(IPAddress(192,168,1,4)  /*ip*/, IPAddress(192,168,1,1 /*gw*/), IPAddress(255,255,255,0 /*sn mask*/)); // optional DNS 4th argument
-  //wm.setSTAStaticIPConfig(IPAddress(192,168,1,12)  /*ip*/, IPAddress(192,168,1,1 /*gw*/), IPAddress(255,255,255,0 /*sn mask*/)); // optional DNS 4th argument
+  //wm.setSTAStaticIPConfig(IPAddress(192,168,1,4)  /*ip*/, IPAddress(192,168,1,1 /*gw*/), IPAddress(255,255,255,0 /*sn mask*/)); // optional DNS 4th argument
+  ////wm.setSTAStaticIPConfig(IPAddress(192,168,1,12)  /*ip*/, IPAddress(192,168,1,1 /*gw*/), IPAddress(255,255,255,0 /*sn mask*/)); // optional DNS 4th argument
 
-  bool res;
-  res = wm.autoConnect("AutoConnectAP","password"); // password protected ap
+  //bool res;
+  //res = wm.autoConnect("AutoConnectAP","password"); // password protected ap
 
-  if(!res) {
-      Serial.println("Failed to connect");
+  //if(!res) {
+  //    Serial.println("Failed to connect");
       // ESP.restart();
-  } 
-  else {
+  //} 
+  //else {
       //if you get here you have connected to the WiFi    
-      Serial.println("connected...yeey :)");
-  }
+  //    Serial.println("connected...yeey :)");
+  //}
+  #endif
 
   Serial.println("");
 
@@ -374,8 +476,8 @@ void setup(void){
   }
 
   Serial.println("");
-  Serial.print("Connected to ");
-  Serial.println(wm.getWiFiSSID(false /*persistent*/));
+//  Serial.print("Connected to ");
+//  Serial.println(wm.getWiFiSSID(false /*persistent*/));
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
 
@@ -538,7 +640,9 @@ double minmax(double val, double mn, double mx)
   return val < mn ? mn : (val > mx ? mx : val);
 }
 
-void loop(void){
+void loop(void)
+{
+  //Serial.print(".");
   server.handleClient();
   int channel0 = Read3202(tv[amb].pin);
   int channel1 = Read3202(tv[meat].pin);
@@ -582,7 +686,6 @@ void loop(void){
 
     myPID.Compute();
 
-
     int angleI = floor(minmax(angle, 0.0, 255.0));
     
     angleI = angleI * 105 / 255;
@@ -597,11 +700,8 @@ void loop(void){
     mqttClient.publish("bbqtemp/internalTemp", String(intTemps[currentIndex()]));
     mqttClient.publish("bbqtemp/externalTemp", String(temps[currentIndex()]));
     mqttClient.publish("test/esptest", String(currentIndex()));
-
-
   }
 
-    mqttClient.loop();
-
+  mqttClient.loop();
 }
 #endif
