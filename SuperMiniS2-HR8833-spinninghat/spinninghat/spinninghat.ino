@@ -3,7 +3,7 @@
 #include <LOLIN_I2C_MOTOR.h>
 
 #define TOUCH_PIN 7
-#define MAXDUTY   60
+#define MAXDUTY   75
 
 bool motorEnabled = false;
 
