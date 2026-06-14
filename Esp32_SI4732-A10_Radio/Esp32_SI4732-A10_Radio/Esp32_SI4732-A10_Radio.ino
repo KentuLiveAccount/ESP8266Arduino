@@ -43,6 +43,21 @@ I2SClass i2s;
 
 BluetoothA2DPSink a2dp_sink(i2s);
 
+// Set from the A2DP callback (Bluedroid task context); consumed in loop().
+volatile bool btConnected = false;
+volatile bool btStateChanged = false;
+
+void onA2DPConnectionStateChanged(esp_a2d_connection_state_t state, void *)
+{
+  if (state == ESP_A2D_CONNECTION_STATE_CONNECTED) {
+    btConnected = true;
+    btStateChanged = true;
+  } else if (state == ESP_A2D_CONNECTION_STATE_DISCONNECTED) {
+    btConnected = false;
+    btStateChanged = true;
+  }
+}
+
 #define RESET_PIN 26
 
 // I2C bus pin on ESP32
@@ -120,6 +135,7 @@ void setup()
     while (1); // do nothing
   }
 
+  a2dp_sink.set_on_connection_state_changed(onA2DPConnectionStateChanged);
   a2dp_sink.start("MyMusic");
 
   Serial.println("AM and FM station tuning test.");
@@ -149,6 +165,16 @@ void setup()
 // Main
 void loop()
 {
+  if (btStateChanged)
+  {
+    btStateChanged = false;
+    FMBT = !btConnected;
+    digitalWrite(TS5VSWITCH, FMBT ? LOW : HIGH);
+    Serial.println(btConnected
+                     ? "Bluetooth connected -> audio: Bluetooth"
+                     : "Bluetooth disconnected -> audio: Radio");
+  }
+
   if (Serial.available() > 0)
   {
     char key = Serial.read();
