@@ -20,6 +20,9 @@
   curl -X POST -H "Content-Type: text/plain" "http://192.168.1.4/setpidp" -d "0"
   curl -X POST -H "Content-Type: text/plain" "http://192.168.1.4/setpidi" -d "0"
   curl -X POST -H "Content-Type: text/plain" "http://192.168.1.4/setpidd" -d "0"
+  curl -X POST -H "Content-Type: text/plain" "http://192.168.1.4/setpredictionmode" -d "1"
+  curl -X POST -H "Content-Type: text/plain" "http://192.168.1.4/setpredictionhorizon" -d "30"
+  curl -X POST -H "Content-Type: text/plain" "http://192.168.1.4/setservodeadband" -d "2"
 */
 //#include <WiFiManager.h>
 
@@ -28,10 +31,12 @@
 #include "RunningAverage.h"
 #include "DataLogger.h"
 #include "GrillSimulator.h"
+#include "TemperaturePredictor.h"
 #include <ESP8266WebServer.h>
 #include <Servo.h>
 #include <PID_v1.h> // from https://github.com/br3ttb/Arduino-PID-Library/
 #include <math.h>
+#include <stdlib.h>
 #include "wifisetting.h"
 
 #define NTCMuxSelect D2
@@ -54,20 +59,38 @@ double ResistorBank1 =  9951.5592; //supposed to be 10k.
 
 double targetTemp = 205;
 double currentTemp = 0;
+double pidInputTemp = 0;
+double predictedTemp = 0;
 double angle = 0;
 double pidP = 13;
 double pidI = 20;
 double pidD = 15;
 
 GrillSimulator grillSim;
+TemperaturePredictor temperaturePredictor;
 
-PID myPID(&currentTemp, &angle, &targetTemp, pidP, pidI, pidD, DIRECT);
+PID myPID(&pidInputTemp, &angle, &targetTemp, pidP, pidI, pidD, DIRECT);
 
 MCP3202 mcp(MCP3202_CS, V_0);
 
 Servo myservo;
 
 ESP8266WebServer server(80);
+
+enum PredictionMode
+{
+  PredictionOff = 0,
+  PredictionShadow = 1,
+  PredictionActive = 2
+};
+
+int predictionMode = PredictionShadow;
+int previousPredictionMode = PredictionShadow;
+int predictionHorizonSeconds = 30;
+int servoDeadbandDegrees = 0;
+int rawServoAngle = 0;
+int appliedServoAngle = 0;
+bool hasAppliedServoAngle = false;
 
 
 void handleRoot() {
@@ -204,6 +227,7 @@ void handleSetSimMode() {
   
   int mode = server.arg("plain").toInt();
   grillSim.setEnabled(mode != 0);
+  temperaturePredictor.Reset();
   
   if (grillSim.isEnabled()) {
     server.send(200, "text/plain", "Simulation mode ENABLED");
@@ -215,6 +239,94 @@ void handleSetSimMode() {
 
   delay(200);
   digitalWrite(led, LOW);
+}
+
+bool parseIntegerBody(int &value)
+{
+  String body = server.arg("plain");
+  body.trim();
+  if (body.length() == 0)
+    return false;
+
+  char *end = nullptr;
+  const long parsed = strtol(body.c_str(), &end, 10);
+  if (end == body.c_str() || *end != '\0')
+    return false;
+
+  value = (int)parsed;
+  return true;
+}
+
+void handleSetPredictionMode()
+{
+  int mode = 0;
+  if (!parseIntegerBody(mode) || mode < PredictionOff || mode > PredictionActive)
+  {
+    server.send(400, "text/plain", "prediction mode must be 0 (off), 1 (shadow), or 2 (active)");
+    return;
+  }
+
+  predictionMode = mode;
+  server.sendHeader(accessControlAllowOrigin, "*");
+  server.send(200, "text/plain", "prediction mode updated");
+}
+
+void handleSetPredictionHorizon()
+{
+  int horizon = 0;
+  if (!parseIntegerBody(horizon) || horizon < 0 || horizon > 60)
+  {
+    server.send(400, "text/plain", "prediction horizon must be from 0 to 60 seconds");
+    return;
+  }
+
+  predictionHorizonSeconds = horizon;
+  server.sendHeader(accessControlAllowOrigin, "*");
+  server.send(200, "text/plain", "prediction horizon updated");
+}
+
+void handleSetServoDeadband()
+{
+  int deadband = 0;
+  if (!parseIntegerBody(deadband) || deadband < 0 || deadband > 15)
+  {
+    server.send(400, "text/plain", "servo deadband must be from 0 to 15 degrees");
+    return;
+  }
+
+  servoDeadbandDegrees = deadband;
+  server.sendHeader(accessControlAllowOrigin, "*");
+  server.send(200, "text/plain", "servo deadband updated");
+}
+
+void handlePredictionStatus()
+{
+  String response = "{ \"measuredtemp\": ";
+  response += String(currentTemp);
+  response += ", \"predictedtemp\": ";
+  response += String(predictedTemp);
+  response += ", \"slopefperminute\": ";
+  response += String(temperaturePredictor.SlopePerMinute());
+  response += ", \"ready\": ";
+  response += (temperaturePredictor.IsReady() ? "true" : "false");
+  response += ", \"mode\": ";
+  response += String(predictionMode);
+  response += ", \"horizonseconds\": ";
+  response += String(predictionHorizonSeconds);
+  response += ", \"historyseconds\": ";
+  response += String(TemperaturePredictor::HistorySeconds);
+  response += ", \"sampleintervalseconds\": ";
+  response += String(TemperaturePredictor::SampleIntervalMs / 1000);
+  response += ", \"deadbanddegrees\": ";
+  response += String(servoDeadbandDegrees);
+  response += ", \"rawservoangle\": ";
+  response += String(rawServoAngle);
+  response += ", \"appliedservoangle\": ";
+  response += String(appliedServoAngle);
+  response += " }";
+
+  server.sendHeader(accessControlAllowOrigin, "*");
+  server.send(200, applicationJsonUtf8, response);
 }
 
 void handleNotFound(){
@@ -293,6 +405,11 @@ void setup(void){
   
   server.on("/setsimmode", HTTP_POST, handleSetSimMode);
 
+  server.on("/predictionstatus", HTTP_GET, handlePredictionStatus);
+  server.on("/setpredictionmode", HTTP_POST, handleSetPredictionMode);
+  server.on("/setpredictionhorizon", HTTP_POST, handleSetPredictionHorizon);
+  server.on("/setservodeadband", HTTP_POST, handleSetServoDeadband);
+
   server.onNotFound(handleNotFound);
 
   server.begin();
@@ -335,8 +452,8 @@ double minmax(double val, double mn, double mx)
 }
 
 NestedRunningAverage<50, 20> avg[2];
-int millisTimeLast = 0;
-int millisTimeLastServo = 0;
+uint32_t millisTimeLast = 0;
+uint32_t millisTimeLastServo = 0;
 
 void loop(void)
 {
@@ -368,34 +485,48 @@ void loop(void)
     currentInternalTemp = grillSim.getMeatTemp();
   }
 
-  myPID.Compute();
+  uint32_t millisNow = millis();
+  temperaturePredictor.Add(millisNow, currentTemp);
+  predictedTemp = temperaturePredictor.Predict(currentTemp, predictionHorizonSeconds);
+  pidInputTemp = predictionMode == PredictionActive ? predictedTemp : currentTemp;
 
-  int angleI = floor(minmax(angle, 0.0, 255.0));
-  
-  angleI = angleI * 105 / 255;
-
-  int millisNow = millis();
-  if (millisTimeLastServo == 0 || abs(millisNow - millisTimeLastServo) > (1000))
+  if (predictionMode != previousPredictionMode)
   {
-    millisTimeLastServo = millisNow;
-    myservo.write(angleI);
+    myPID.SetMode(MANUAL);
+    myPID.SetMode(AUTOMATIC);
+    previousPredictionMode = predictionMode;
   }
 
-  if (millisTimeLast != 0 && abs(millisNow - millisTimeLast) < (1000 * 10))
+  myPID.Compute();
+
+  rawServoAngle = floor(minmax(angle, 0.0, 255.0)) * 105 / 255;
+
+  if (millisTimeLastServo == 0 || (uint32_t)(millisNow - millisTimeLastServo) > 1000)
+  {
+    millisTimeLastServo = millisNow;
+    if (!hasAppliedServoAngle || abs(rawServoAngle - appliedServoAngle) >= servoDeadbandDegrees)
+    {
+      appliedServoAngle = rawServoAngle;
+      myservo.write(appliedServoAngle);
+      hasAppliedServoAngle = true;
+    }
+  }
+
+  if (millisTimeLast != 0 && (uint32_t)(millisNow - millisTimeLast) < (1000 * 10))
     return;
 
   //DEBUG(Serial.println("\nchan0: " + String(channel0)));
   //DEBUG(Serial.println("\nchan1: " + String(channel1)));
 
   millisTimeLast = millisNow;
-  AddTemp(currentTemp, currentInternalTemp, targetTemp, angleI, pidP,  pidI, pidD);
+  AddTemp(currentTemp, currentInternalTemp, targetTemp, appliedServoAngle, pidP,  pidI, pidD);
 
   //DEBUG(Serial.println("\nservo angle: " + String(angle)));
-  //DEBUG(Serial.println("\nservo angleI: " + String(angleI)));
+  //DEBUG(Serial.println("\nraw servo angle: " + String(rawServoAngle)));
   if (grillSim.isEnabled()) {
-    DEBUG(Serial.printf("[SIM] %f, %f, %d\n", currentTemp, currentInternalTemp, angleI));
+    DEBUG(Serial.printf("[SIM] %f, %f, %f, %d, %d\n", currentTemp, predictedTemp, currentInternalTemp, rawServoAngle, appliedServoAngle));
   } else {
-    DEBUG(Serial.printf("%f, %f, %d\n", currentTemp, currentInternalTemp, angleI));
+    DEBUG(Serial.printf("%f, %f, %f, %d, %d\n", currentTemp, predictedTemp, currentInternalTemp, rawServoAngle, appliedServoAngle));
   }
 
 }
