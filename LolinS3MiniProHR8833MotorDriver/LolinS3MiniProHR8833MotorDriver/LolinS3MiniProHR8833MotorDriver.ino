@@ -21,12 +21,12 @@ qmi8658_cfg_t qmi8658_cfg ={
 
 qmi8658_result_t qmi8658_result;
 
-void setup1() 
+void setup() 
 {
   Serial.begin(9600);
   Serial.print("initializing QMI8658C\n");
 }
-void setup() 
+void setup1() 
 {
   Serial.begin(9600);
   Serial.print("initializing QMI8658C\n");
@@ -53,7 +53,7 @@ void printSign(float v)
     Serial.print("0");
 }
 
-void loop() {
+void loop1() {
   qmi8658c.read(&data);
   Serial.print("acc x: ");
   printSign(data.acc_xyz.x);
@@ -97,11 +97,12 @@ void loop2() {
   delay(10);
 }
 
-void loop1() {
+void loop() {
+  Serial.println(".");
   LOLIN_I2C_MOTOR motor; 
   motor.changeFreq(MOTOR_CH_BOTH, 40000); //Change A & B 's Frequency to 40kHz.
-  motor.changeStatus(MOTOR_CH_A, MOTOR_STATUS_CCW);
-  motor.changeStatus(MOTOR_CH_B, MOTOR_STATUS_CW);
+  motor.changeStatus(MOTOR_CH_A, MOTOR_STATUS_CCW); // push
+  motor.changeStatus(MOTOR_CH_B, MOTOR_STATUS_CW); // pull
   for (int i = 10; i <= 100; i += 10)
   {
     motor.changeDuty(MOTOR_CH_A, i);
@@ -120,8 +121,21 @@ void loop1() {
   delay(500);
   motor.changeStatus(MOTOR_CH_A, MOTOR_STATUS_CW);
   motor.changeStatus(MOTOR_CH_B, MOTOR_STATUS_CCW);
-  motor.changeDuty(MOTOR_CH_A, 100);
-  motor.changeDuty(MOTOR_CH_B, 100);
+  for (int i = 10; i <= 100; i += 10)
+  {
+    motor.changeDuty(MOTOR_CH_A, i);
+    motor.changeDuty(MOTOR_CH_B, i);
+    delay(100);
+  }
+  delay(1000);
+  
+  for (int i = 100; i > 0; i -= 10)
+  {
+    motor.changeDuty(MOTOR_CH_A, i);
+    motor.changeDuty(MOTOR_CH_B, i);
+    delay(100);
+  }
+
   delay(1000);
   
   motor.changeStatus(MOTOR_CH_BOTH, MOTOR_STATUS_STOP);
